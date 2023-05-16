@@ -42,5 +42,12 @@ Other Software: MARS, IntelliJ, Microsoft Visual Studio, ServiceNow, Excel   <br
 Extracurriculars  <br />
 Member, Software Developers Association (SoDA) Fall 2018 - Present  <br />
 </template>
+ <script>
+function showContent() {
+  var temp = document.getElementsByTagName("template")[0];
+  var clon = temp.content.cloneNode(true);
+  document.body.appendChild(clon);
+}
+</script>
 </body>
 </html>
