@@ -30,7 +30,7 @@ if ($_FILES["fileToUpload"]["size"] > 500000) {
 
 // Allow certain file formats
 if($imageFileType != "pptx") {
-  echo "Sorry, only .pptx files are allowed.";
+  echo "Sorry, only .PPTX files are allowed.";
   $uploadOk = 0;
 }
 
