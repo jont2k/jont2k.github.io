@@ -16,5 +16,34 @@ The below is an application where the user can upload a powerpoint and get it ba
 <br />
 <br />
 
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+canvas {
+    border: 1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+</head>
+<body onload="startGame()">
+<script>
+
+function startGame() {
+    myGameArea.start();
+}
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = 480;
+        this.canvas.height = 270;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+    }
+}
+
+</script>
+
+<p>We have created a game area! (or at least an empty canvas)</p>
+  
 </body>
 </html>
