@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-color1, #667eea) 0%, var(--bg-color2, #764ba2) 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .calculator {
+            background: var(--calc-bg, rgba(255, 255, 255, 0.1));
+            backdrop-filter: blur(10px);
+            border-radius: calc(20px * var(--calc-scale, 1));
+            padding: calc(30px * var(--calc-scale, 1));
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: var(--calc-width, 350px);
+            width: calc(100% - 40px);
+            min-width: 280px;
+            transition: all 0.3s ease;
+            transform: scale(var(--calc-scale, 1));
+            transform-origin: center;
+        }
+
+        @media (max-width: 768px) {
+            .calculator {
+                max-width: calc(100vw - 40px);
+                width: calc(100vw - 40px);
+            }
+        }
+
+        .display {
+            background: var(--display-bg, rgba(0, 0, 0, 0.3));
+            color: var(--display-color, white);
+            font-size: calc(2.5rem * var(--calc-scale, 1));
+            font-weight: 300;
+            text-align: right;
+            padding: calc(20px * var(--calc-scale, 1));
+            margin-bottom: calc(20px * var(--calc-scale, 1));
+            border-radius: calc(10px * var(--calc-scale, 1));
+            min-height: calc(80px * var(--calc-scale, 1));
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            transition: all 0.3s ease;
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: calc(15px * var(--calc-scale, 1));
+        }
+
+        button {
+            padding: calc(20px * var(--calc-scale, 1));
+            font-size: calc(1.2rem * var(--calc-scale, 1));
+            font-weight: 500;
+            border: none;
+            border-radius: calc(10px * var(--calc-scale, 1));
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: var(--btn-bg, rgba(255, 255, 255, 0.2));
+            color: var(--btn-color, white);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        button:hover {
+            background: var(--btn-hover, rgba(255, 255, 255, 0.3));
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .operator {
+            background: var(--op-bg, rgba(255, 165, 0, 0.3));
+            color: var(--op-color, white);
+        }
+
+        .operator:hover {
+            background: var(--op-hover, rgba(255, 165, 0, 0.5));
+        }
+
+        .equals {
+            background: var(--eq-bg, rgba(76, 175, 80, 0.3));
+            color: var(--eq-color, white);
+        }
+
+        .equals:hover {
+            background: var(--eq-hover, rgba(76, 175, 80, 0.5));
+        }
+
+        .clear {
+            background: var(--clear-bg, rgba(244, 67, 54, 0.3));
+            color: var(--clear-color, white);
+        }
+
+        .clear:hover {
+            background: var(--clear-hover, rgba(244, 67, 54, 0.5));
+        }
+
+        .zero {
+            grid-column: span 2;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--title-color, white);
+            margin-bottom: calc(20px * var(--calc-scale, 1));
+            font-weight: 300;
+            font-size: calc(1.8rem * var(--calc-scale, 1));
+            transition: color 0.3s ease;
+        }
+
+        .color-toggle {
+            position: fixed;
+            top: 20px;
+            right: 160px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            z-index: 1001;
+            transition: all 0.3s ease;
+        }
+
+        .color-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .profiles-toggle {
+            position: fixed;
+            top: 20px;
+            right: 90px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            z-index: 1001;
+            transition: all 0.3s ease;
+        }
+
+        .profiles-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .help-toggle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            z-index: 1001;
+            transition: all 0.3s ease;
+        }
+
+        .help-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .color-panel {
+            position: fixed;
+            top: 80px;
+            right: 160px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 320px;
+            width: 320px;
+            z-index: 1000;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .color-panel.open {
+            max-height: 700px;
+            opacity: 1;
+            transform: translateY(0);
+            overflow-y: auto;
+        }
+
+        .help-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 320px;
+            width: 320px;
+            z-index: 1000;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .help-panel.open {
+            max-height: 700px;
+            opacity: 1;
+            transform: translateY(0);
+            overflow-y: auto;
+        }
+
+        .profiles-panel {
+            position: fixed;
+            top: 80px;
+            right: 90px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 320px;
+            width: 320px;
+            z-index: 1000;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        .profiles-panel.open {
+            max-height: 500px;
+            opacity: 1;
+            transform: translateY(0);
+            overflow-y: auto;
+        }
+
+        .color-group {
+            margin-bottom: 15px;
+        }
+
+        .color-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .color-input {
+            width: 100%;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .preset-colors {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .preset-color {
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .preset-color:hover {
+            transform: scale(1.1);
+            border-color: #333;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .reset-btn {
+            width: 100%;
+            padding: 10px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-top: 15px;
+            transition: background 0.2s ease;
+        }
+
+        .reset-btn:hover {
+            background: #d32f2f;
+        }
+
+        .size-controls {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .size-control-group {
+            margin-bottom: 12px;
+        }
+
+        .size-control-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .size-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        .size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+        }
+
+        .size-slider::-webkit-slider-thumb:hover {
+            background: #2980b9;
+            transform: scale(1.1);
+        }
+
+        .size-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .size-value {
+            display: inline-block;
+            background: #f8f9fa;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #495057;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .size-reset-btn {
+            width: 100%;
+            padding: 8px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: background 0.2s ease;
+            margin-top: 8px;
+        }
+
+        .size-reset-btn:hover {
+            background: #5a6268;
+        }
+
+        .size-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .size-input {
+            width: 60px;
+            padding: 4px 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .size-unit {
+            font-size: 0.8rem;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .profile-section {
+            border-top: 1px solid #e0e0e0;
+            padding-top: 15px;
+            margin-top: 15px;
+        }
+
+        .profile-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .profile-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .save-btn {
+            background: #2196f3;
+            color: white;
+        }
+
+        .save-btn:hover {
+            background: #1976d2;
+        }
+
+        .load-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        .load-btn:hover {
+            background: #388e3c;
+        }
+
+        .export-btn {
+            background: #ff9800;
+            color: white;
+        }
+
+        .export-btn:hover {
+            background: #f57c00;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .saved-profiles {
+            max-height: 120px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+
+        .profile-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 0.85rem;
+        }
+
+        .profile-item:last-child {
+            border-bottom: none;
+        }
+
+        .profile-name {
+            flex: 1;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .profile-actions {
+            display: flex;
+            gap: 4px;
+        }
+
+        .profile-action-btn {
+            padding: 2px 6px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .apply-btn {
+            background: #4caf50;
+            color: white;
+        }
+
+        .apply-btn:hover {
+            background: #388e3c;
+        }
+
+        .delete-btn {
+            background: #f44336;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background: #d32f2f;
+        }
+
+        .profile-input {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
+        .no-profiles {
+            text-align: center;
+            color: #666;
+            font-size: 0.8rem;
+            padding: 15px;
+            font-style: italic;
+        }
+
+        .help-section {
+            margin-bottom: 20px;
+        }
+
+        .help-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .help-content {
+            font-size: 0.9rem;
+            color: #34495e;
+            line-height: 1.5;
+        }
+
+        .help-step {
+            margin-bottom: 8px;
+            padding-left: 16px;
+            position: relative;
+        }
+
+        .help-step::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #3498db;
+            font-weight: bold;
+        }
+
+        .help-keyboard {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+        }
+
+        .keyboard-shortcut {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 0.85rem;
+        }
+
+        .keyboard-shortcut:last-child {
+            margin-bottom: 0;
+        }
+
+        .key {
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #495057;
+        }
+
+        .help-icon {
+            font-size: 1rem;
+        }
+
+        .author-credit {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 300;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .author-credit:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body>
+    <button class="color-toggle" onclick="toggleColorPanel()">🎨</button>
+    <button class="profiles-toggle" onclick="toggleProfilesPanel()">💾</button>
+    <button class="help-toggle" onclick="toggleHelpPanel()">❓</button>
+
+    <div class="color-panel" id="colorPanel">
+        <div class="panel-title">Customize Calculator</div>
+        
+        <div class="size-controls">
+            <div class="size-control-group">
+                <label>Calculator Scale: <span class="size-value" id="scaleValue">100%</span></label>
+                <input type="range" class="size-slider" id="scaleSlider" min="50" max="150" value="100" oninput="updateScale(this.value)">
+                <div class="size-input-group">
+                    <input type="number" class="size-input" id="scaleInput" min="50" max="150" value="100" onchange="updateScaleFromInput(this.value)">
+                    <span class="size-unit">%</span>
+                </div>
+            </div>
+            
+            <div class="size-control-group">
+                <label>Calculator Width: <span class="size-value" id="widthValue">350px</span></label>
+                <input type="range" class="size-slider" id="widthSlider" min="280" max="500" value="350" oninput="updateWidth(this.value)">
+                <div class="size-input-group">
+                    <input type="number" class="size-input" id="widthInput" min="280" max="500" value="350" onchange="updateWidthFromInput(this.value)">
+                    <span class="size-unit">px</span>
+                </div>
+            </div>
+            
+            <button class="size-reset-btn" onclick="resetSize()">Reset Size</button>
+        </div>
+
+        
+        <div class="color-group">
+            <label>Background Gradient Start</label>
+            <input type="color" class="color-input" value="#667eea" onchange="updateColor('--bg-color1', this.value)">
+            <div class="preset-colors">
+                <div class="preset-color" style="background: #667eea" onclick="updateColorFromPreset('--bg-color1', '#667eea')"></div>
+                <div class="preset-color" style="background: #ff6b6b" onclick="updateColorFromPreset('--bg-color1', '#ff6b6b')"></div>
+                <div class="preset-color" style="background: #4ecdc4" onclick="updateColorFromPreset('--bg-color1', '#4ecdc4')"></div>
+                <div class="preset-color" style="background: #45b7d1" onclick="updateColorFromPreset('--bg-color1', '#45b7d1')"></div>
+                <div class="preset-color" style="background: #96ceb4" onclick="updateColorFromPreset('--bg-color1', '#96ceb4')"></div>
+                <div class="preset-color" style="background: #feca57" onclick="updateColorFromPreset('--bg-color1', '#feca57')"></div>
+            </div>
+        </div>
+
+        <div class="color-group">
+            <label>Background Gradient End</label>
+            <input type="color" class="color-input" value="#764ba2" onchange="updateColor('--bg-color2', this.value)">
+            <div class="preset-colors">
+                <div class="preset-color" style="background: #764ba2" onclick="updateColorFromPreset('--bg-color2', '#764ba2')"></div>
+                <div class="preset-color" style="background: #ee5a24" onclick="updateColorFromPreset('--bg-color2', '#ee5a24')"></div>
+                <div class="preset-color" style="background: #0abde3" onclick="updateColorFromPreset('--bg-color2', '#0abde3')"></div>
+                <div class="preset-color" style="background: #006ba6" onclick="updateColorFromPreset('--bg-color2', '#006ba6')"></div>
+                <div class="preset-color" style="background: #6c5ce7" onclick="updateColorFromPreset('--bg-color2', '#6c5ce7')"></div>
+                <div class="preset-color" style="background: #a55eea" onclick="updateColorFromPreset('--bg-color2', '#a55eea')"></div>
+            </div>
+        </div>
+
+        <div class="color-group">
+            <label>Calculator Background</label>
+            <input type="color" class="color-input" value="#ffffff" onchange="updateColorWithAlpha('--calc-bg', this.value, '0.1')">
+        </div>
+
+        <div class="color-group">
+            <label>Display Background</label>
+            <input type="color" class="color-input" value="#000000" onchange="updateColorWithAlpha('--display-bg', this.value, '0.3')">
+        </div>
+
+        <div class="color-group">
+            <label>Number Buttons</label>
+            <input type="color" class="color-input" value="#ffffff" onchange="updateColorWithAlpha('--btn-bg', this.value, '0.2')">
+        </div>
+
+        <div class="color-group">
+            <label>Operator Buttons</label>
+            <input type="color" class="color-input" value="#ffa500" onchange="updateColorWithAlpha('--op-bg', this.value, '0.3')">
+        </div>
+
+        <div class="color-group">
+            <label>Equals Button</label>
+            <input type="color" class="color-input" value="#4caf50" onchange="updateColorWithAlpha('--eq-bg', this.value, '0.3')">
+        </div>
+
+        <div class="color-group">
+            <label>Clear Buttons</label>
+            <input type="color" class="color-input" value="#f44336" onchange="updateColorWithAlpha('--clear-bg', this.value, '0.3')">
+        </div>
+
+        <button class="reset-btn" onclick="resetAll()">Reset All</button>
+
+        <div class="profile-section">
+            <div class="panel-title" style="font-size: 1rem; margin-bottom: 10px;">Quick Actions</div>
+            <div style="text-align: center; color: #666; font-size: 0.9rem;">
+                Click the 💾 button above to manage color profiles
+            </div>
+        </div>
+    </div>
+
+    <div class="profiles-panel" id="profilesPanel">
+        <div class="panel-title">Color Profiles</div>
+        
+        <input type="text" class="profile-input" id="profileName" placeholder="Enter profile name...">
+        
+        <div class="profile-controls">
+            <button class="profile-btn save-btn" onclick="saveProfile()">Save</button>
+            <button class="profile-btn load-btn" onclick="document.getElementById('fileInput').click()">Import</button>
+            <button class="profile-btn export-btn" onclick="exportProfile()">Export</button>
+        </div>
+        
+        <input type="file" id="fileInput" class="file-input" accept=".json" onchange="importProfile(event)">
+        
+        <div class="saved-profiles" id="profilesList">
+            <div class="no-profiles">No saved profiles</div>
+        </div>
+    </div>
+    
+    <div class="help-panel" id="helpPanel">
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">🧮</span>
+                Calculator Basics
+            </div>
+            <div class="help-content">
+                <div class="help-step">Click number buttons or use your keyboard to input numbers</div>
+                <div class="help-step">Use operation buttons (+, -, ×, ÷) for calculations</div>
+                <div class="help-step">Press = or Enter to calculate results</div>
+                <div class="help-step">Use C to clear all or ⌫ to delete last character</div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">⌨️</span>
+                Keyboard Shortcuts
+            </div>
+            <div class="help-content">
+                <div class="help-keyboard">
+                    <div class="keyboard-shortcut">
+                        <span>Numbers & Decimal</span>
+                        <span><span class="key">0-9</span> <span class="key">.</span></span>
+                    </div>
+                    <div class="keyboard-shortcut">
+                        <span>Operations</span>
+                        <span><span class="key">+ - * /</span></span>
+                    </div>
+                    <div class="keyboard-shortcut">
+                        <span>Calculate</span>
+                        <span><span class="key">Enter</span> or <span class="key">=</span></span>
+                    </div>
+                    <div class="keyboard-shortcut">
+                        <span>Clear All</span>
+                        <span><span class="key">Esc</span> or <span class="key">C</span></span>
+                    </div>
+                    <div class="keyboard-shortcut">
+                        <span>Delete Last</span>
+                        <span><span class="key">Backspace</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">🎨</span>
+                Color Customization
+            </div>
+            <div class="help-content">
+                <div class="help-step">Click the 🎨 button (top-right) to open color panel</div>
+                <div class="help-step">Use color pickers or preset swatches to change themes</div>
+                <div class="help-step">Colors update in real-time as you make changes</div>
+                <div class="help-step">Click "Reset to Default" to restore original colors</div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">📏</span>
+                Size Customization
+            </div>
+            <div class="help-content">
+                <div class="help-step">Use the "Calculator Scale" slider to make the calculator bigger or smaller</div>
+                <div class="help-step">Adjust "Calculator Width" to change how wide the calculator appears</div>
+                <div class="help-step">Click "Reset Size" to return to default dimensions</div>
+                <div class="help-step">Size changes work together with color themes</div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">💾</span>
+                Color Profiles
+            </div>
+            <div class="help-content">
+                <div class="help-step">Click the 💾 button (top-right) to open the profiles panel</div>
+                <div class="help-step">Enter a name and click "Save" to store your color theme</div>
+                <div class="help-step">Click "Apply" on saved profiles to switch themes instantly</div>
+                <div class="help-step">Use "Export" to download themes as .json files</div>
+                <div class="help-step">Use "Import" to load theme files from others</div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">💾</span>
+                Saving & Sharing Themes
+            </div>
+            <div class="help-content">
+                <div class="help-step">Click the 💾 button to access profile management</div>
+                <div class="help-step">Save, apply, and organize your favorite color themes</div>
+                <div class="help-step">Export themes to share with friends or backup</div>
+                <div class="help-step">Import themes from others to try new looks</div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">💡</span>
+                Tips & Tricks
+            </div>
+            <div class="help-content">
+                <div class="help-step">Try preset color swatches for quick theme changes</div>
+                <div class="help-step">Create themed collections (Dark Mode, Ocean, etc.)</div>
+                <div class="help-step">Export your themes as backups before experimenting</div>
+                <div class="help-step">The calculator works fully with both mouse and keyboard</div>
+                <div class="help-step">Click this ❓ button anytime to toggle this help guide</div>
+            </div>
+        </div>
+
+        <div class="help-section">
+            <div class="help-title">
+                <span class="help-icon">✍️</span>
+                Author's Note
+            </div>
+            <div class="help-content">
+                <div style="background: #f0f8ff; border-left: 4px solid #3498db; padding: 12px; border-radius: 6px; font-style: italic; color: #2c3e50;">
+                    "I designed this calculator to be more than just a tool for math - it's a canvas for creativity! The customizable color system lets you express your personal style while handling your calculations. Whether you prefer subtle professional themes or vibrant artistic palettes, make it uniquely yours. Happy calculating!"
+                    <div style="text-align: right; margin-top: 8px; font-weight: 600; color: #3498db;">
+                        - Jon T
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="calculator">
+        <h1>Calculator</h1>
+        <div class="display" id="display">0</div>
+        <div class="buttons">
+            <button class="clear" onclick="clearDisplay()">C</button>
+            <button class="clear" onclick="deleteLast()">⌫</button>
+            <button class="operator" onclick="appendToDisplay('/')">/</button>
+            <button class="operator" onclick="appendToDisplay('*')">×</button>
+            
+            <button onclick="appendToDisplay('7')">7</button>
+            <button onclick="appendToDisplay('8')">8</button>
+            <button onclick="appendToDisplay('9')">9</button>
+            <button class="operator" onclick="appendToDisplay('-')">-</button>
+            
+            <button onclick="appendToDisplay('4')">4</button>
+            <button onclick="appendToDisplay('5')">5</button>
+            <button onclick="appendToDisplay('6')">6</button>
+            <button class="operator" onclick="appendToDisplay('+')">+</button>
+            
+            <button onclick="appendToDisplay('1')">1</button>
+            <button onclick="appendToDisplay('2')">2</button>
+            <button onclick="appendToDisplay('3')">3</button>
+            <button class="equals" onclick="calculate()" rowspan="2">=</button>
+            
+            <button class="zero" onclick="appendToDisplay('0')">0</button>
+            <button onclick="appendToDisplay('.')">.</button>
+        </div>
+    </div>
+
+     <a href="https://claude.ai" target="_blank" class="author-credit">
+        Created by Jon T
+    </a>
+
+    <script>
+        let display = document.getElementById('display');
+        let currentInput = '0';
+        let shouldResetDisplay = false;
+
+        // Color customization functions
+        function toggleColorPanel() {
+            const panel = document.getElementById('colorPanel');
+            const helpPanel = document.getElementById('helpPanel');
+            const profilesPanel = document.getElementById('profilesPanel');
+            
+            // Close other panels if open
+            helpPanel.classList.remove('open');
+            profilesPanel.classList.remove('open');
+            
+            panel.classList.toggle('open');
+        }
+
+        function toggleHelpPanel() {
+            const panel = document.getElementById('helpPanel');
+            const colorPanel = document.getElementById('colorPanel');
+            const profilesPanel = document.getElementById('profilesPanel');
+            
+            // Close other panels if open
+            colorPanel.classList.remove('open');
+            profilesPanel.classList.remove('open');
+            
+            panel.classList.toggle('open');
+        }
+
+        function toggleProfilesPanel() {
+            const panel = document.getElementById('profilesPanel');
+            const colorPanel = document.getElementById('colorPanel');
+            const helpPanel = document.getElementById('helpPanel');
+            
+            // Close other panels if open
+            colorPanel.classList.remove('open');
+            helpPanel.classList.remove('open');
+            
+            panel.classList.toggle('open');
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : null;
+        }
+
+        function updateColor(property, value) {
+            document.documentElement.style.setProperty(property, value);
+            saveColors();
+        }
+
+        function updateColorWithAlpha(property, value, alpha) {
+            const rgb = hexToRgb(value);
+            if (rgb) {
+                const rgba = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+                document.documentElement.style.setProperty(property, rgba);
+                
+                // Also set hover versions
+                if (property === '--btn-bg') {
+                    document.documentElement.style.setProperty('--btn-hover', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.3)`);
+                } else if (property === '--op-bg') {
+                    document.documentElement.style.setProperty('--op-hover', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`);
+                } else if (property === '--eq-bg') {
+                    document.documentElement.style.setProperty('--eq-hover', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`);
+                } else if (property === '--clear-bg') {
+                    document.documentElement.style.setProperty('--clear-hover', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.5)`);
+                }
+                
+                saveColors();
+            }
+        }
+
+        function updateColorFromPreset(property, value) {
+            document.documentElement.style.setProperty(property, value);
+            // Update the corresponding input
+            const inputs = document.querySelectorAll('.color-input');
+            inputs.forEach(input => {
+                if (input.onchange.toString().includes(property)) {
+                    input.value = value;
+                }
+            });
+            saveColors();
+        }
+
+        function resetAll() {
+            // Reset colors
+            const defaults = {
+                '--bg-color1': '#667eea',
+                '--bg-color2': '#764ba2',
+                '--calc-bg': 'rgba(255, 255, 255, 0.1)',
+                '--display-bg': 'rgba(0, 0, 0, 0.3)',
+                '--display-color': 'white',
+                '--btn-bg': 'rgba(255, 255, 255, 0.2)',
+                '--btn-hover': 'rgba(255, 255, 255, 0.3)',
+                '--btn-color': 'white',
+                '--op-bg': 'rgba(255, 165, 0, 0.3)',
+                '--op-hover': 'rgba(255, 165, 0, 0.5)',
+                '--op-color': 'white',
+                '--eq-bg': 'rgba(76, 175, 80, 0.3)',
+                '--eq-hover': 'rgba(76, 175, 80, 0.5)',
+                '--eq-color': 'white',
+                '--clear-bg': 'rgba(244, 67, 54, 0.3)',
+                '--clear-hover': 'rgba(244, 67, 54, 0.5)',
+                '--clear-color': 'white',
+                '--title-color': 'white'
+            };
+
+            Object.entries(defaults).forEach(([property, value]) => {
+                document.documentElement.style.setProperty(property, value);
+            });
+
+            // Reset input values
+            document.querySelector('input[onchange*="--bg-color1"]').value = '#667eea';
+            document.querySelector('input[onchange*="--bg-color2"]').value = '#764ba2';
+            document.querySelector('input[onchange*="--calc-bg"]').value = '#ffffff';
+            document.querySelector('input[onchange*="--display-bg"]').value = '#000000';
+            document.querySelector('input[onchange*="--btn-bg"]').value = '#ffffff';
+            document.querySelector('input[onchange*="--op-bg"]').value = '#ffa500';
+            document.querySelector('input[onchange*="--eq-bg"]').value = '#4caf50';
+            document.querySelector('input[onchange*="--clear-bg"]').value = '#f44336';
+
+            // Reset size
+            document.documentElement.style.setProperty('--calc-scale', '1');
+            document.getElementById('scaleSlider').value = '100';
+            document.getElementById('scaleInput').value = '100';
+            document.getElementById('scaleValue').textContent = '100%';
+            
+            document.documentElement.style.setProperty('--calc-width', '350px');
+            document.getElementById('widthSlider').value = '350';
+            document.getElementById('widthInput').value = '350';
+            document.getElementById('widthValue').textContent = '350px';
+
+            saveColors();
+        }
+
+        function saveColors() {
+            const colors = {};
+            const style = getComputedStyle(document.documentElement);
+            const properties = [
+                '--bg-color1', '--bg-color2', '--calc-bg', '--display-bg', '--display-color',
+                '--btn-bg', '--btn-hover', '--btn-color', '--op-bg', '--op-hover', '--op-color',
+                '--eq-bg', '--eq-hover', '--eq-color', '--clear-bg', '--clear-hover', '--clear-color',
+                '--title-color'
+            ];
+            
+            properties.forEach(prop => {
+                const value = document.documentElement.style.getPropertyValue(prop);
+                if (value) colors[prop] = value;
+            });
+            
+            // Note: In this environment we can't use localStorage, so colors reset on page refresh
+            // In a real implementation, you would save to localStorage here
+        }
+
+        function loadColors() {
+            // Note: In this environment we can't use localStorage
+            // In a real implementation, you would load from localStorage here
+        }
+
+        // Size control functions
+        function updateScale(value) {
+            document.documentElement.style.setProperty('--calc-scale', value / 100);
+            document.getElementById('scaleValue').textContent = value + '%';
+            document.getElementById('scaleInput').value = value;
+        }
+
+        function updateScaleFromInput(value) {
+            const clampedValue = Math.max(50, Math.min(150, value));
+            document.documentElement.style.setProperty('--calc-scale', clampedValue / 100);
+            document.getElementById('scaleValue').textContent = clampedValue + '%';
+            document.getElementById('scaleSlider').value = clampedValue;
+            document.getElementById('scaleInput').value = clampedValue;
+        }
+
+        function updateWidth(value) {
+            document.documentElement.style.setProperty('--calc-width', value + 'px');
+            document.getElementById('widthValue').textContent = value + 'px';
+            document.getElementById('widthInput').value = value;
+        }
+
+        function updateWidthFromInput(value) {
+            const clampedValue = Math.max(280, Math.min(500, value));
+            document.documentElement.style.setProperty('--calc-width', clampedValue + 'px');
+            document.getElementById('widthValue').textContent = clampedValue + 'px';
+            document.getElementById('widthSlider').value = clampedValue;
+            document.getElementById('widthInput').value = clampedValue;
+        }
+
+        function resetSize() {
+            // Reset scale
+            document.documentElement.style.setProperty('--calc-scale', '1');
+            document.getElementById('scaleSlider').value = '100';
+            document.getElementById('scaleInput').value = '100';
+            document.getElementById('scaleValue').textContent = '100%';
+            
+            // Reset width
+            document.documentElement.style.setProperty('--calc-width', '350px');
+            document.getElementById('widthSlider').value = '350';
+            document.getElementById('widthInput').value = '350';
+            document.getElementById('widthValue').textContent = '350px';
+        }
+
+        // Load saved colors on page load
+        loadColors();
+
+        // Profile management
+        let savedProfiles = {};
+
+        function saveProfile() {
+            const nameInput = document.getElementById('profileName');
+            const profileName = nameInput.value.trim();
+            
+            if (!profileName) {
+                alert('Please enter a profile name');
+                return;
+            }
+            
+            const currentColors = getCurrentColors();
+            savedProfiles[profileName] = currentColors;
+            
+            nameInput.value = '';
+            updateProfilesList();
+            
+            // In a real app, you would save to localStorage here
+            console.log('Profile saved:', profileName, currentColors);
+        }
+
+        function getCurrentColors() {
+            const colors = {};
+            const properties = [
+                '--bg-color1', '--bg-color2', '--calc-bg', '--display-bg',
+                '--btn-bg', '--op-bg', '--eq-bg', '--clear-bg'
+            ];
+            
+            properties.forEach(prop => {
+                const value = document.documentElement.style.getPropertyValue(prop);
+                if (value) {
+                    colors[prop] = value;
+                } else {
+                    // Get default values
+                    const defaults = {
+                        '--bg-color1': '#667eea',
+                        '--bg-color2': '#764ba2',
+                        '--calc-bg': 'rgba(255, 255, 255, 0.1)',
+                        '--display-bg': 'rgba(0, 0, 0, 0.3)',
+                        '--btn-bg': 'rgba(255, 255, 255, 0.2)',
+                        '--op-bg': 'rgba(255, 165, 0, 0.3)',
+                        '--eq-bg': 'rgba(76, 175, 80, 0.3)',
+                        '--clear-bg': 'rgba(244, 67, 54, 0.3)'
+                    };
+                    colors[prop] = defaults[prop];
+                }
+            });
+            
+            return colors;
+        }
+
+        function applyProfile(profileName) {
+            const profile = savedProfiles[profileName];
+            if (!profile) return;
+            
+            Object.entries(profile).forEach(([property, value]) => {
+                document.documentElement.style.setProperty(property, value);
+                
+                // Update corresponding input values
+                if (property === '--bg-color1') {
+                    document.querySelector('input[onchange*="--bg-color1"]').value = value;
+                } else if (property === '--bg-color2') {
+                    document.querySelector('input[onchange*="--bg-color2"]').value = value;
+                }
+                // Handle rgba colors by converting back to hex for color inputs
+                else {
+                    const rgbaMatch = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                    if (rgbaMatch) {
+                        const hex = '#' + [rgbaMatch[1], rgbaMatch[2], rgbaMatch[3]]
+                            .map(x => parseInt(x).toString(16).padStart(2, '0')).join('');
+                        
+                        if (property === '--calc-bg') {
+                            document.querySelector('input[onchange*="--calc-bg"]').value = hex;
+                        } else if (property === '--display-bg') {
+                            document.querySelector('input[onchange*="--display-bg"]').value = hex;
+                        } else if (property === '--btn-bg') {
+                            document.querySelector('input[onchange*="--btn-bg"]').value = hex;
+                        } else if (property === '--op-bg') {
+                            document.querySelector('input[onchange*="--op-bg"]').value = hex;
+                        } else if (property === '--eq-bg') {
+                            document.querySelector('input[onchange*="--eq-bg"]').value = hex;
+                        } else if (property === '--clear-bg') {
+                            document.querySelector('input[onchange*="--clear-bg"]').value = hex;
+                        }
+                    }
+                }
+            });
+            
+            // Update hover states
+            updateAllHoverStates();
+        }
+
+        function updateAllHoverStates() {
+            const properties = ['--btn-bg', '--op-bg', '--eq-bg', '--clear-bg'];
+            properties.forEach(prop => {
+                const value = document.documentElement.style.getPropertyValue(prop);
+                const rgbaMatch = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+                if (rgbaMatch) {
+                    const [r, g, b] = [rgbaMatch[1], rgbaMatch[2], rgbaMatch[3]];
+                    const hoverProp = prop.replace('-bg', '-hover');
+                    const hoverAlpha = prop === '--btn-bg' ? '0.3' : '0.5';
+                    document.documentElement.style.setProperty(hoverProp, `rgba(${r}, ${g}, ${b}, ${hoverAlpha})`);
+                }
+            });
+        }
+
+        function deleteProfile(profileName) {
+            if (confirm(`Delete profile "${profileName}"?`)) {
+                delete savedProfiles[profileName];
+                updateProfilesList();
+            }
+        }
+
+        function updateProfilesList() {
+            const profilesList = document.getElementById('profilesList');
+            const profileNames = Object.keys(savedProfiles);
+            
+            if (profileNames.length === 0) {
+                profilesList.innerHTML = '<div class="no-profiles">No saved profiles</div>';
+                return;
+            }
+            
+            profilesList.innerHTML = profileNames.map(name => `
+                <div class="profile-item">
+                    <span class="profile-name">${name}</span>
+                    <div class="profile-actions">
+                        <button class="profile-action-btn apply-btn" onclick="applyProfile('${name}')">Apply</button>
+                        <button class="profile-action-btn delete-btn" onclick="deleteProfile('${name}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function exportProfile() {
+            const currentColors = getCurrentColors();
+            const profileData = {
+                name: 'My Calculator Theme',
+                colors: currentColors,
+                createdAt: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(profileData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `calculator-theme-${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importProfile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const profileData = JSON.parse(e.target.result);
+                    
+                    if (profileData.colors) {
+                        const profileName = profileData.name || `Imported-${Date.now()}`;
+                        savedProfiles[profileName] = profileData.colors;
+                        updateProfilesList();
+                        
+                        // Optionally apply the imported profile immediately
+                        if (confirm(`Import successful! Apply "${profileName}" theme now?`)) {
+                            applyProfile(profileName);
+                        }
+                    } else {
+                        alert('Invalid profile file format');
+                    }
+                } catch (error) {
+                    alert('Error reading profile file: ' + error.message);
+                }
+            };
+            reader.readAsText(file);
+            
+            // Reset file input
+            event.target.value = '';
+        }
+
+        function updateDisplay() {
+            display.textContent = currentInput;
+        }
+
+        function appendToDisplay(value) {
+            if (shouldResetDisplay) {
+                currentInput = '';
+                shouldResetDisplay = false;
+            }
+            
+            if (currentInput === '0' && value !== '.') {
+                currentInput = value;
+            } else {
+                currentInput += value;
+            }
+            
+            updateDisplay();
+        }
+
+        function clearDisplay() {
+            currentInput = '0';
+            shouldResetDisplay = false;
+            updateDisplay();
+        }
+
+        function deleteLast() {
+            if (currentInput.length > 1) {
+                currentInput = currentInput.slice(0, -1);
+            } else {
+                currentInput = '0';
+            }
+            updateDisplay();
+        }
+
+        function calculate() {
+            try {
+                // Replace × with * for evaluation
+                let expression = currentInput.replace(/×/g, '*');
+                
+                // Evaluate the expression
+                let result = eval(expression);
+                
+                // Handle division by zero and other errors
+                if (!isFinite(result)) {
+                    currentInput = 'Error';
+                } else {
+                    // Round to avoid floating point precision issues
+                    currentInput = parseFloat(result.toPrecision(12)).toString();
+                }
+                
+                shouldResetDisplay = true;
+                updateDisplay();
+            } catch (error) {
+                currentInput = 'Error';
+                shouldResetDisplay = true;
+                updateDisplay();
+            }
+        }
+
+        // Keyboard support
+        document.addEventListener('keydown', function(event) {
+            const key = event.key;
+            
+            if (key >= '0' && key <= '9' || key === '.') {
+                appendToDisplay(key);
+            } else if (key === '+' || key === '-') {
+                appendToDisplay(key);
+            } else if (key === '*') {
+                appendToDisplay('*');
+            } else if (key === '/') {
+                event.preventDefault(); // Prevent browser search
+                appendToDisplay('/');
+            } else if (key === 'Enter' || key === '=') {
+                event.preventDefault();
+                calculate();
+            } else if (key === 'Escape' || key === 'c' || key === 'C') {
+                clearDisplay();
+            } else if (key === 'Backspace') {
+                deleteLast();
+            }
+        });
+    </script>
+</body>
+</html>
