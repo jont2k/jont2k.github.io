@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Jon's Portfolio</title>
-<meta name="description" content="Jon builds apps and tools. Portfolio and contact.">
+<title>Jon. T's Portfolio</title>
+<meta name="description" content="Jon. T builds apps and tools. Portfolio and contact.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -13,13 +13,13 @@
 <body>
 <div class="topbar" id="topbar">
   <div class="topbar-in">
-    <span class="topbar-name">Jon</span>
+    <span class="topbar-name">Jon. T</span>
     <button class="topbar-btn" type="button" id="to-top">↑ Back to top</button>
   </div>
 </div>
 <div class="wrap">
   <header class="site-head">
-    <a class="wordmark" href="#top">Jon</a>
+    <a class="wordmark" href="#top">Jon. T</a>
     <nav class="site-nav" aria-label="Site">
       <a href="#work" aria-current="page">Work</a>
       <a href="#about">About</a>
@@ -35,7 +35,7 @@
         <div><span class="mono">Ship to</span><strong>Open to anywhere in the US</strong></div>
       </div>
       <div class="label-main">
-        <h1>Jon builds <em>apps</em> and tools.</h1>
+        <h1>Jon. T builds <em>apps</em> and tools.</h1>
         <p>Computer science graduate from Arizona State University. I support Amazon's distribution network.</p>
       </div>
       <div class="label-foot">
@@ -88,27 +88,20 @@
       <div class="sec-head"><h2>Contact</h2></div>
       <div class="contact">
         <div class="contact-direct">
-          <p>Send a message with the form, or write to me directly at:</p>
+          <p>Fill in the form and your mail app opens with the message ready to send. Or write to me directly at:</p>
           <span class="contact-addr" id="contact-addr">jtwebsolution1@gmail.com</span>
         </div>
-        <form class="contact-form" id="contact-form" method="post" action="https://formsubmit.co/jtwebsolution1@gmail.com" data-ajax="https://formsubmit.co/ajax/jtwebsolution1@gmail.com">
-          <input type="hidden" name="_subject" value="New message from jont2k.github.io">
-          <input type="hidden" name="_template" value="table">
-          <input class="hp" type="text" name="_honey" id="cf-honey" tabindex="-1" autocomplete="off" aria-hidden="true">
-          <div class="field">
+        <form class="contact-form" id="contact-form" data-mailto="jtwebsolution1@gmail.com">
+          <div class="field field-wide">
             <label for="cf-name">Name</label>
             <input id="cf-name" name="name" type="text" autocomplete="name" required>
-          </div>
-          <div class="field">
-            <label for="cf-email">Your email</label>
-            <input id="cf-email" name="email" type="email" autocomplete="email" required>
           </div>
           <div class="field field-wide">
             <label for="cf-message">Message</label>
             <textarea id="cf-message" name="message" rows="6" required></textarea>
           </div>
           <div class="form-foot">
-            <button class="btn" type="submit" id="cf-send">Send message</button>
+            <button class="btn" type="submit" id="cf-send">Open in mail app</button>
             <p class="form-status" id="cf-status" role="status" aria-live="polite"></p>
           </div>
         </form>

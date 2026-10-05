@@ -16,31 +16,16 @@
   var form = document.getElementById('contact-form');
   if (form) {
     var status = document.getElementById('cf-status');
-    var send = document.getElementById('cf-send');
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      var url = form.getAttribute('data-ajax');
-      if (!url) {
-        status.textContent = 'This preview cannot send messages. The form works on the live site.';
-        return;
-      }
-      var data = {};
-      new FormData(form).forEach(function (value, key) { data[key] = value; });
-      send.disabled = true;
-      status.textContent = 'Sending…';
-      fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify(data)
-      }).then(function (r) {
-        return r.json().then(function (j) { return { ok: r.ok, body: j }; });
-      }).then(function (res) {
-        if (!res.ok || String(res.body.success) === 'false') throw new Error('not sent');
-        form.reset();
-        status.textContent = 'Message sent. I will reply to the email you gave.';
-      }).catch(function () {
-        status.textContent = 'The message did not send. Email me directly at jtwebsolution1@gmail.com.';
-      }).then(function () { send.disabled = false; });
+      var to = form.getAttribute('data-mailto');
+      var name = document.getElementById('cf-name').value.trim();
+      var message = document.getElementById('cf-message').value.trim();
+      var url = 'mailto:' + to +
+        '?subject=' + encodeURIComponent('Portfolio message from ' + name) +
+        '&body=' + encodeURIComponent((message + '\n\n' + name).replace(/\r?\n/g, '\r\n'));
+      status.textContent = 'Your mail app should open with the message ready to send. If nothing opens, email ' + to + ' directly.';
+      window.location.href = url;
     });
   }
 })();
