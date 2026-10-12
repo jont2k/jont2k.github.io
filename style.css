@@ -106,7 +106,7 @@ p { margin: 0; }
 .group h3 { font-family: var(--mono); font-weight: 500; font-size: var(--t-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); padding-bottom: 8px; border-bottom: 2px solid var(--ink); }
 .items { list-style: none; margin: 0; padding: 0; }
 .item { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) 7.5rem; gap: 6px 28px; align-items: start; padding-block: 18px; border-bottom: 1px solid var(--rule); }
-.item.has-art { grid-template-columns: 5.5rem minmax(0, 12rem) minmax(0, 1fr) 7.5rem; }
+.item.has-art { grid-template-columns: 5.5rem minmax(0, 12rem) minmax(0, 1fr) 10rem; }
 .item-art { display: block; width: 5.5rem; height: auto; aspect-ratio: 1; border-radius: 22%; }
 .item-name { font-family: var(--display); font-weight: 700; font-size: 1.625rem; line-height: 1.1; text-transform: uppercase; letter-spacing: 0.01em; }
 .item-tags { color: var(--ink-soft); margin-top: 6px; display: block; }
@@ -114,6 +114,7 @@ p { margin: 0; }
 .status { justify-self: end; font-family: var(--mono); font-size: var(--t-xs); letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border: 1.5px solid var(--ink); white-space: nowrap; }
 .status.wip { background: var(--tape); color: var(--tape-ink); border-color: var(--tape); }
 .status.proto { border-style: dashed; }
+.status.test { background: var(--tote); color: var(--paper); border-color: var(--tote); }
 .manifest-note { color: var(--ink-soft); font-size: var(--t-sm); max-width: 65ch; }
 
 /* About */
@@ -171,9 +172,12 @@ td:first-child { font-weight: 600; }
 
 @media (max-width: 760px) {
   .item { grid-template-columns: minmax(0, 1fr) auto; }
-  .item.has-art { grid-template-columns: 4.5rem minmax(0, 1fr) auto; }
+  .item.has-art { grid-template-columns: 4.5rem minmax(0, 1fr); }
   .item-art { width: 4.5rem; }
   .item-desc { grid-column: 1 / -1; grid-row: 2; }
+  .item.has-art .item-art { grid-row: 1 / span 2; }
+  .item.has-art .status { grid-column: 2; grid-row: 2; justify-self: start; align-self: start; }
+  .item.has-art .item-desc { grid-row: 3; }
   .about, .policy, .contact { grid-template-columns: minmax(0, 1fr); }
   .toc { position: static; }
 }
