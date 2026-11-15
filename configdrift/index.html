@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="ConfigDrift compares network switch configs against a known-good baseline, section by section, across 100+ files. Runs entirely in your browser.">
+<link rel="icon" href="../configdrift.svg" type="image/svg+xml">
+<title>ConfigDrift — Switch Config Compliance Diff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1419;--panel:#161d25;--panel2:#1c252f;--line:#2a3542;--text:#d8e0e8;--muted:#8796a5;
+  --accent:#3fb6a8;--accent2:#2a8f84;--miss:#f0716a;--missbg:rgba(240,113,106,.12);
+  --extra:#5ccf8a;--extrabg:rgba(92,207,138,.12);--chg:#e8b44f;--chgbg:rgba(232,180,79,.13);
+  --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{padding:18px 24px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+header h1 span{color:var(--accent)}
+header .sub{color:var(--muted);font-size:13px}
+header .priv{margin-left:auto;font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+main{padding:18px 24px 60px;max-width:1500px;margin:0 auto}
+.grid2{display:grid;grid-template-columns:1fr 2fr;gap:14px}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:16px;background:var(--panel);transition:.15s;min-height:118px;display:flex;flex-direction:column;gap:8px}
+.drop.over{border-color:var(--accent);background:#14232a}
+.drop h3{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:600}
+.drop .state{font-family:var(--mono);font-size:13px;color:var(--text);word-break:break-all}
+.drop .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:auto}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 12px;cursor:pointer;font-size:13px;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.btn.primary:hover{background:var(--accent)}
+.btn.sm{padding:3px 8px;font-size:12px}
+.btn:disabled{opacity:.45;cursor:default}
+.hint{color:var(--muted);font-size:12px}
+details.settings{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+details.settings summary{padding:11px 16px;cursor:pointer;font-weight:600;font-size:13px;list-style:none;display:flex;gap:10px;align-items:center}
+details.settings summary::before{content:'▸';color:var(--muted);transition:.15s}
+details.settings[open] summary::before{transform:rotate(90deg)}
+.setgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:0 16px 16px}
+@media(max-width:1000px){.setgrid{grid-template-columns:1fr}}
+.setgrid label.t{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+.setgrid label.t small{font-weight:400;color:var(--muted)}
+textarea{width:100%;min-height:130px;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px;font-family:var(--mono);font-size:12px;resize:vertical}
+.toggles{display:flex;gap:18px;flex-wrap:wrap;padding:0 16px 14px;align-items:center}
+.toggles label{display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer}
+.err{color:var(--miss);font-size:12px;font-family:var(--mono);padding:0 16px 10px}
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:18px 0 6px}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card .k{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted)}
+.card .v{font-size:24px;font-weight:700;margin-top:2px}
+.card .v small{font-size:13px;color:var(--muted);font-weight:500}
+.card .v.mono{font-size:12.5px;font-family:var(--mono);font-weight:400;line-height:1.35;margin-top:6px;word-break:break-all}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-top:16px;flex-wrap:wrap}
+.tab{padding:9px 16px;cursor:pointer;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;color:var(--muted);font-weight:500;background:none}
+.tab.on{color:var(--text);background:var(--panel);border-color:var(--line);margin-bottom:-1px}
+.tab .cnt{font-size:11px;background:var(--panel2);border-radius:999px;padding:1px 7px;margin-left:6px;color:var(--muted)}
+.pane{background:var(--panel);border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px;padding:14px;min-height:240px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input[type=text],.toolbar select,.toolbar input[type=number]{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:6px 10px;font-size:13px}
+.toolbar input[type=text]{min-width:240px}
+.toolbar .grow{flex:1}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;padding:7px 8px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap;position:sticky;top:0;background:var(--panel)}
+th.sorted::after{content:' ▾'}
+th.sorted.asc::after{content:' ▴'}
+td{padding:6px 8px;border-bottom:1px solid #212b36;vertical-align:middle}
+tr.clk{cursor:pointer}
+tr.clk:hover td{background:#1a242e}
+td.mono,.mono{font-family:var(--mono);font-size:12.5px}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.tablewrap{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.bar{display:flex;align-items:center;gap:8px}
+.bar .track{width:90px;height:7px;border-radius:9px;background:#26313c;overflow:hidden}
+.bar .fill{height:100%;border-radius:9px}
+.n-miss{color:var(--miss)}.n-extra{color:var(--extra)}.n-chg{color:var(--chg)}.zero{color:#4c5a68}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.5px;border-radius:5px;padding:1px 6px;text-transform:uppercase}
+.tag.miss{background:var(--missbg);color:var(--miss)}
+.tag.extra{background:var(--extrabg);color:var(--extra)}
+.tag.chg{background:var(--chgbg);color:var(--chg)}
+.tag.ok{background:rgba(63,182,168,.14);color:var(--accent)}
+.tag.gray{background:var(--panel2);color:var(--muted)}
+.empty{color:var(--muted);text-align:center;padding:50px 10px}
+.empty b{color:var(--text)}
+.dev{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;overflow:hidden}
+.dev .h{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer;background:var(--panel2)}
+.dev .h .pct{font-variant-numeric:tabular-nums;font-weight:600;min-width:84px}
+.dev .h .ln{font-family:var(--mono);font-size:12.5px;flex:1;word-break:break-all}
+.dev .h .sec{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.dev .b{padding:10px 12px;display:none;border-top:1px solid var(--line)}
+.dev.open .b{display:block}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-family:var(--mono);font-size:11.5px;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:2px 7px;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.variant{margin-bottom:10px}
+.variant .vt{font-family:var(--mono);font-size:12.5px;margin-bottom:5px}
+.sect{margin-bottom:14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.sect .sh{background:var(--panel2);padding:7px 12px;font-family:var(--mono);font-size:12.5px;font-weight:600;display:flex;gap:8px;align-items:center}
+.sect .sh .glob{font-weight:400;color:var(--muted);font-family:Inter,sans-serif;font-size:11px}
+.dl{font-family:var(--mono);font-size:12.5px;padding:3px 12px;white-space:pre-wrap;word-break:break-all;display:flex;gap:10px}
+.dl .s{width:14px;flex:none;font-weight:700}
+.dl.m{background:var(--missbg)}.dl.m .s{color:var(--miss)}
+.dl.e{background:var(--extrabg)}.dl.e .s{color:var(--extra)}
+.dl.c{background:var(--chgbg)}.dl.c .s{color:var(--chg)}
+.dl .lnno{margin-left:auto;color:var(--muted);font-size:11px;flex:none}
+.dl .arrow{color:var(--muted)}
+.sbs{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;table-layout:fixed}
+.sbs td{padding:1px 6px;border:none;white-space:pre-wrap;word-break:break-all;vertical-align:top}
+.sbs td.no{width:46px;color:#56636f;text-align:right;user-select:none;font-size:11px}
+.sbs tr.del td.l{background:var(--missbg)}
+.sbs tr.ins td.r{background:var(--extrabg)}
+.sbs tr.mod td.l{background:var(--missbg)} .sbs tr.mod td.r{background:var(--extrabg)}
+.sbs tr.gap td{background:#18212b;color:var(--muted);text-align:center;cursor:pointer;padding:3px}
+.sbs tr.gap td:hover{color:var(--accent)}
+.dhead{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.dhead h2{margin:0;font-size:16px;font-family:var(--mono)}
+.qres{margin-bottom:10px;border:1px solid var(--line);border-radius:8px}
+.qres .qh{padding:6px 12px;background:var(--panel2);display:flex;gap:10px;align-items:center;cursor:pointer}
+.qres .ql{font-family:var(--mono);font-size:12px;padding:2px 12px;white-space:pre-wrap;word-break:break-all}
+.qres .ql .ctx{color:var(--muted)}
+mark{background:rgba(232,180,79,.35);color:inherit;border-radius:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:none;background:var(--bg);padding:6px 11px;cursor:pointer;font-size:13px;color:var(--muted)}
+.seg button.on{background:var(--accent2);color:#fff}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent2);color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none;z-index:9}
+.toast.show{opacity:1}
+.busy{position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--accent),transparent);background-size:200% 100%;animation:mv 1s linear infinite;display:none;z-index:10}
+@keyframes mv{from{background-position:200% 0}to{background-position:-200% 0}}
+.filelist{max-height:64px;overflow:auto;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+<div class="busy" id="busy"></div>
+<header>
+  <a href="../" style="color:var(--muted);text-decoration:none;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:4px 10px">← Jon. T</a>
+  <h1>Config<span>Drift</span></h1>
+  <div class="sub">Compare switch configs against a known-good baseline — section-aware, order-independent, built for 100+ files.</div>
+  <div class="priv">🔒 Runs entirely in your browser — files are never uploaded</div>
+</header>
+<main>
+  <div class="grid2">
+    <div class="drop" id="dropBase">
+      <h3>1 · Known-good baseline</h3>
+      <div class="state" id="baseState"><span class="hint">Drop the golden config here, or pick a file.</span></div>
+      <div class="row">
+        <label class="btn">Choose file<input type="file" id="inBase" hidden></label>
+      </div>
+    </div>
+    <div class="drop" id="dropSet">
+      <h3>2 · Configs to check</h3>
+      <div class="state" id="setState"><span class="hint">Drop many files or a whole folder here (.cfg, .txt, .conf, show run output…).</span></div>
+      <div class="filelist" id="setList"></div>
+      <div class="row">
+        <label class="btn">Choose files<input type="file" id="inSet" multiple hidden></label>
+        <label class="btn">Choose folder<input type="file" id="inDir" webkitdirectory multiple hidden></label>
+        <button class="btn" id="btnClear">Clear all</button>
+        <span class="grow"></span>
+        <button class="btn primary" id="btnDemo">Load demo data (120 switches)</button>
+      </div>
+    </div>
+  </div>
+
+  <details class="settings" id="settings">
+    <summary>Normalization &amp; ignore rules <span class="hint" style="font-weight:400">— decide what counts as a real difference</span></summary>
+    <div class="toggles">
+      <label><input type="checkbox" id="optSecrets"> Mask passwords / secrets / SNMP communities</label>
+      <label><input type="checkbox" id="optIPs"> Mask <i>all</i> IPv4 addresses</label>
+      <label><input type="checkbox" id="optCase"> Case-insensitive</label>
+      <span class="grow" style="flex:1"></span>
+      <button class="btn sm" id="btnReset">Reset to defaults</button>
+    </div>
+    <div class="setgrid">
+      <div>
+        <label class="t">Ignore lines <small>— regex, one per line. Matching lines (and anything nested under them) are skipped.</small></label>
+        <textarea id="txtIgnore" spellcheck="false"></textarea>
+      </div>
+      <div>
+        <label class="t">Ignore sections <small>— regex matched against top-level section headers.</small></label>
+        <textarea id="txtSections" spellcheck="false"></textarea>
+      </div>
+      <div>
+        <label class="t">Substitutions <small>— <code>regex =&gt; replacement</code>. Use to blank out per-device values (hostnames, mgmt IPs, port descriptions).</small></label>
+        <textarea id="txtSubs" spellcheck="false"></textarea>
+      </div>
+    </div>
+    <div class="err" id="ruleErr"></div>
+  </details>
+
+  <div class="cards" id="cards"></div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab on" data-tab="summary">Fleet summary<span class="cnt" id="cntFiles">0</span></button>
+    <button class="tab" data-tab="common">Common deviations<span class="cnt" id="cntDev">0</span></button>
+    <button class="tab" data-tab="query">Query</button>
+    <button class="tab" data-tab="detail">File detail<span class="cnt" id="cntDetail">—</span></button>
+  </div>
+  <div class="pane" id="pane"></div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =========================================================================
+   Utilities
+   ========================================================================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const SEP = '\u001f';
+const IN_FRAME = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
+function busy(on){ $('#busy').style.display = on ? 'block' : 'none'; }
+async function copyText(text, label){
+  try { await navigator.clipboard.writeText(text); toast((label||'Copied')+' to clipboard'); return; } catch(e){}
+  const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast((label||'Copied')+' to clipboard'); } catch(e){ toast('Copy failed — select and copy manually'); }
+  ta.remove();
+}
+let DL = null;   // artifact viewer's downloads capability, when available
+if (window.claude && typeof window.claude.use === 'function'){
+  window.claude.use('downloads').then(d => { if (d){ DL = d; renderAll(); } }).catch(()=>{});
+}
+async function download(name, text){
+  if (DL){ try { await DL.save({ filename: name, data: text }); } catch(e){ toast('Download cancelled'); } return; }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'})); a.download=name;
+  document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+function exportButtons(id, label){
+  return `<span style="display:inline-flex;gap:6px">` + `<button class="btn sm" data-copy="${id}">Copy ${label}</button>` +
+    ((IN_FRAME && !DL) ? '' : `<button class="btn sm" data-dl="${id}">Download</button>`) + `</span>`;
+}
+const csvCell = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; };
+const csv = rows => rows.map(r => r.map(csvCell).join(',')).join('\n');
+function scoreColor(s){ return s >= 99.95 ? 'var(--accent)' : s >= 95 ? 'var(--chg)' : 'var(--miss)'; }
+function fmtPct(n){ return (n >= 99.95 && n < 100) ? '99.9%' : (Math.round(n*10)/10)+'%'; }
+function natCmp(a,b){ return String(a).localeCompare(String(b), undefined, {numeric:true, sensitivity:'base'}); }
+
+/* =========================================================================
+   Settings
+   ========================================================================= */
+const DEFAULTS = {
+  maskSecrets: true, maskIPs: false, caseInsensitive: false,
+  ignore: [
+    '^Building configuration',
+    '^Current configuration\\s*:',
+    '^Last configuration change',
+    '^NVRAM config last updated',
+    '^No configuration change since',
+    '^ntp clock-period',
+    '^!Time:',
+    '^!Running configuration last done',
+    '^## Last (changed|commit)',
+  ].join('\n'),
+  sections: [
+    '^crypto pki certificate chain',
+    '^crypto pki trustpoint TP-self-signed',
+    '^license udi',
+  ].join('\n'),
+  subs: [
+    '^hostname \\S+ => hostname <HOSTNAME>',
+    '^ip address \\S+ \\S+ => ip address <IP> <MASK>',
+    '^ip address \\S+/\\d+ => ip address <IP/LEN>',
+    '^ip default-gateway \\S+ => ip default-gateway <IP>',
+    '^description .+ => description <DESC>',
+    '^snmp-server location .+ => snmp-server location <LOCATION>',
+    '^switchname \\S+ => switchname <HOSTNAME>',
+    '^(set system )?host-name \\S+ => $1host-name <HOSTNAME>',
+  ].join('\n'),
+};
+let settings = loadSettings();
+function loadSettings(){
+  try { const s = JSON.parse(localStorage.getItem('configdrift.settings')||'null'); if (s) return Object.assign({}, DEFAULTS, s); } catch(e){}
+  return Object.assign({}, DEFAULTS);
+}
+function saveSettings(){ try { localStorage.setItem('configdrift.settings', JSON.stringify(settings)); } catch(e){} }
+
+function compileRules(s){
+  const errors = [];
+  const flags = 'i';
+  const list = (txt, name) => txt.split('\n').map(l=>l.trim()).filter(Boolean).map(l => {
+    try { return new RegExp(l, flags); } catch(e){ errors.push(`${name}: ${l} — ${e.message}`); return null; }
+  }).filter(Boolean);
+  const subs = s.subs.split('\n').map(l=>l.trim()).filter(Boolean).map(l => {
+    const i = l.indexOf('=>');
+    if (i < 0) { errors.push(`Substitution missing "=>": ${l}`); return null; }
+    const pat = l.slice(0,i).trim(), rep = l.slice(i+2).trim();
+    try { return { re: new RegExp(pat, 'gi'), rep }; } catch(e){ errors.push(`Substitution: ${pat} — ${e.message}`); return null; }
+  }).filter(Boolean);
+  return { ignore: list(s.ignore,'Ignore line'), sections: list(s.sections,'Ignore section'), subs,
+           maskSecrets: s.maskSecrets, maskIPs: s.maskIPs, ci: s.caseInsensitive, errors };
+}
+
+const SECRET_RES = [
+  [/\b(secret|password|key-string|authentication-key|auth-key|pre-shared-key|encrypted-password)(\s+\d{1,2})?\s+\S+/gi, '$1$2 <SECRET>'],
+  [/\b(snmp-server community)\s+\S+/gi, '$1 <SECRET>'],
+  [/\b(snmp-server host\s+\S+(?:\s+(?:traps|informs))?(?:\s+version\s+\S+)?)\s+(?!version\b)\S+/gi, '$1 <SECRET>'],
+  [/\b(key)\s+([0-7])\s+\S+/gi, '$1 $2 <SECRET>'],
+  [/\b(server-key|tacacs-server key|radius-server key)\s+(\d\s+)?\S+/gi, '$1 $2<SECRET>'],
+  [/("\$\d\$[^"]*")/g, '"<SECRET>"'],
+];
+const IP_RE = /\b(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?\b/g;
+
+function normalize(text, R){
+  let t = text;
+  if (R.maskSecrets) for (const [re, rep] of SECRET_RES) t = t.replace(re, rep);
+  for (const s of R.subs) { s.re.lastIndex = 0; t = t.replace(s.re, s.rep); }
+  if (R.maskIPs) t = t.replace(IP_RE, '<IP>');
+  t = t.replace(/\s+/g,' ').trim();
+  if (R.ci) t = t.toLowerCase();
+  return t;
+}
+
+/* =========================================================================
+   Parser — indentation (Cisco IOS/IOS-XE/NX-OS/Arista EOS/Aruba) or
+   brace (Junos) style, plus flat "set" style. Produces one entry per line
+   keyed by its full hierarchical path, so comparisons ignore line order.
+   ========================================================================= */
+const SKIP_RE = /^(end|exit|exit-address-family|exit-af-\S+|exit-vrf|exit-peer-\S+|exit-service-family|quit|!+)$/i;
+
+function parseConfig(raw, R){
+  const src = raw.replace(/\r\n?/g,'\n').split('\n');
+  let braceLines = 0, setLines = 0, nonEmpty = 0;
+  for (const l of src){ const t=l.trim(); if(!t) continue; nonEmpty++; if (/\{\s*$/.test(t)) braceLines++; if (/^(set|delete) /.test(t)) setLines++; }
+  const closeLines = src.filter(l => /^\s*\}\s*$/.test(l)).length;
+  const brace = braceLines >= 2 && closeLines >= 2 && braceLines > nonEmpty*0.03;
+  const flatSet = setLines > nonEmpty*0.5;
+
+  const entries = [];      // compared entries (non-ignored)
+  const viewLines = [];    // normalized lines for line diff (keeps indentation)
+  const seen = new Set();
+  let hostname = '';
+  const stack = [];
+
+  function add(pathArr, rawText, lineNo, indentStr){
+    const key = pathArr.join(SEP);
+    viewLines.push({ text: indentStr + pathArr[pathArr.length-1], lineNo });
+    if (seen.has(key)) return;
+    seen.add(key);
+    entries.push({ key, path: pathArr, text: pathArr[pathArr.length-1], raw: rawText, lineNo, depth: pathArr.length-1 });
+  }
+
+  for (let i=0; i<src.length; i++){
+    const line = src[i].replace(/\s+$/,'');
+    const t0 = line.trim();
+    if (!t0) continue;
+    if (!hostname){
+      const hm = t0.match(/^(?:set system )?(?:host-?name|switchname)\s+"?([^\s";{]+)/i);
+      if (hm) hostname = hm[1];
+    }
+    if (brace){
+      if (/^(#|\/\*)/.test(t0)) continue;
+      if (/^\}/.test(t0)) { stack.pop(); continue; }
+      const inl = t0.match(/^([^{}]+?)\s*\{\s*([^{}]*?)\s*\}\s*;?$/);       // one-liner: netconf { ssh; }
+      if (inl){
+        const parent = stack[stack.length-1];
+        let ignored = parent ? parent.ignored : false;
+        if (!ignored) ignored = (!parent && R.sections.some(r=>r.test(inl[1]))) || R.ignore.some(r=>r.test(inl[1]));
+        if (ignored) continue;
+        const nh = normalize(inl[1], R), base = [...stack.map(s=>s.nt), nh];
+        add(base, inl[1], i+1, '    '.repeat(base.length-1));
+        for (const kid of inl[2].split(';').map(x=>x.trim()).filter(Boolean)){
+          if (R.ignore.some(r=>r.test(kid))) continue;
+          add([...base, normalize(kid, R)], kid, i+1, '    '.repeat(base.length));
+        }
+        continue;
+      }
+      const opens = /\{\s*$/.test(t0);
+      let t = t0.replace(/\s*\{\s*$/,'').replace(/;\s*(#.*)?$/,'');
+      const parent = stack[stack.length-1];
+      let ignored = parent ? parent.ignored : false;
+      if (!ignored) ignored = (!parent && R.sections.some(r=>r.test(t))) || R.ignore.some(r=>r.test(t));
+      const nt = ignored ? t : normalize(t, R);
+      const path = [...stack.map(s=>s.nt), nt];
+      if (opens) stack.push({ nt, ignored });
+      if (!ignored) add(path, t, i+1, '    '.repeat(path.length-1));
+      continue;
+    }
+    // indentation style
+    if (/^[!#]/.test(t0) && !/^#\s*\S+\s*\{/.test(t0)) continue;
+    if (SKIP_RE.test(t0)) continue;
+    const indent = line.match(/^[ \t]*/)[0].replace(/\t/g,'    ').length;
+    let text = t0, lineNo = i+1;
+
+    // banners: banner motd ^C ... ^C   |  banner motd #...#   |  banner motd \n ... \n EOF
+    const bm = t0.match(/^banner\s+(\S+)\s*(.*)$/i);
+    if (bm && indent === 0){
+      let rest = bm[2], delim, body = [];
+      if (!rest){ delim = 'EOF'; }
+      else { delim = rest.startsWith('^C') ? '^C' : rest[0]; rest = rest.slice(delim.length); }
+      const endIdx = rest.indexOf(delim);
+      if (endIdx >= 0 && delim !== 'EOF') body.push(rest.slice(0,endIdx));
+      else {
+        if (rest) body.push(rest);
+        let j = i+1;
+        for (; j<src.length; j++){
+          const l = src[j];
+          if (delim === 'EOF' ? l.trim() === 'EOF' : l.includes(delim)) { if (delim!=='EOF'){ const p=l.slice(0,l.indexOf(delim)); if(p.trim()) body.push(p); } break; }
+          body.push(l);
+        }
+        i = j;
+      }
+      text = `banner ${bm[1]}: ` + body.map(b=>b.trim()).filter(Boolean).join(' ⏎ ');
+      stack.length = 0;
+    }
+
+    while (stack.length && stack[stack.length-1].indent >= indent) stack.pop();
+    const parent = stack[stack.length-1];
+    let ignored = parent ? parent.ignored : false;
+    if (!ignored) ignored = (!parent && R.sections.some(r=>r.test(text))) || R.ignore.some(r=>r.test(text));
+    const nt = ignored ? text : normalize(text, R);
+    stack.push({ indent, nt, ignored });
+    if (ignored) continue;
+    add(stack.map(s=>s.nt), text, lineNo, ' '.repeat(stack.length-1));
+  }
+
+  // assign sections
+  const hasKids = new Set();
+  for (const e of entries) if (e.depth > 0) hasKids.add(e.path[0]);
+  for (const e of entries){
+    if (e.depth > 0 || hasKids.has(e.path[0])) { e.sec = e.path[0]; e.global = false; }
+    else {
+      const tk = e.text.split(' ');
+      let n = 1;
+      if (flatSet) n = 3;
+      else if (/^(ip|ipv6|no|aaa|snmp-server|spanning-tree|ntp|logging|service)$/i.test(tk[0])) n = tk[0].toLowerCase()==='no' ? 3 : 2;
+      e.sec = tk.slice(0, n).join(' ').replace(/ <[^>]+>$/,'');
+      e.global = true;
+    }
+  }
+  const map = new Map(entries.map(e => [e.key, e]));
+  return { entries, map, viewLines, hostname, format: brace ? 'brace' : flatSet ? 'set' : 'indent' };
+}
+
+/* =========================================================================
+   Comparison
+   ========================================================================= */
+const tokens = s => s.split(' ');
+function pairScore(a, b){
+  const sa = a.replace(/^no /,''), sb = b.replace(/^no /,'');
+  if (sa === sb) return 99;               // "no X" vs "X"
+  const ta = tokens(a), tb = tokens(b);
+  let c = 0; while (c < ta.length && c < tb.length && ta[c] === tb[c]) c++;
+  if (c >= 2) return c;
+  // same keyword, same shape, only value-like tokens differ (exec-timeout 10 0 vs 0 0, mtu 1500 vs 9000)
+  if (c >= 1 && ta.length === tb.length){
+    const val = t => /[\d<"]/.test(t);
+    let ok = true; for (let i=c; i<ta.length; i++) if (ta[i] !== tb[i] && !(val(ta[i]) && val(tb[i]))) { ok = false; break; }
+    if (ok) return 1;
+    return 0.5;            // same keyword, same length — weakest match (name DATA vs name USERS)
+  }
+  return 0;
+}
+
+function compare(base, tgt){
+  const missing = [], extra = [];
+  for (const e of base.entries) if (!tgt.map.has(e.key)) missing.push(e);
+  for (const e of tgt.entries) if (!base.map.has(e.key)) extra.push(e);
+  const missSet = new Set(missing.map(e=>e.key)), extraSet = new Set(extra.map(e=>e.key));
+  // pair missing/extra lines that live under the same parent into "changed"
+  const parentKey = e => e.path.slice(0,-1).join(SEP);
+  const byParent = new Map();
+  for (const e of extra){ const k=parentKey(e); if(!byParent.has(k)) byParent.set(k,[]); byParent.get(k).push(e); }
+  const used = new Set(), pairs = new Map();
+  const cands = [];
+  for (const m of missing){
+    const pool = byParent.get(parentKey(m)); if (!pool) continue;
+    for (const x of pool){ const s = pairScore(m.text, x.text); if (s) cands.push([s, m, x]); }
+  }
+  cands.sort((a,b)=>b[0]-a[0]);
+  for (const [, m, x] of cands){ if (pairs.has(m.key) || used.has(x.key)) continue; pairs.set(m.key, x); used.add(x.key); }
+
+  const covered = (e, set) => { for (let d=1; d<e.path.length; d++) if (set.has(e.path.slice(0,d).join(SEP))) return true; return false; };
+  const devs = [];
+  for (const m of missing){
+    const x = pairs.get(m.key);
+    if (x) devs.push({ type:'changed', e:m, other:x, covered:false });
+    else devs.push({ type:'missing', e:m, covered: covered(m, missSet) });
+  }
+  for (const x of extra) if (!used.has(x.key)) devs.push({ type:'extra', e:x, covered: covered(x, extraSet) });
+
+  const nMiss = devs.filter(d=>d.type==='missing').length;
+  const nChg = devs.filter(d=>d.type==='changed').length;
+  const nExtra = devs.filter(d=>d.type==='extra').length;
+  const score = base.entries.length ? (base.entries.length - missing.length) / base.entries.length * 100 : 100;
+  const secs = new Set(devs.map(d=>d.e.sec));
+  return { devs, nMiss, nChg, nExtra, score, nSecs: secs.size, total: nMiss+nChg+nExtra };
+}
+
+/* =========================================================================
+   State
+   ========================================================================= */
+const S = {
+  baseFile: null,        // {name, raw}
+  files: [],             // [{name, raw}]
+  rules: null,
+  base: null,            // parsed
+  results: [],           // [{file, parsed, cmp}]
+  agg: [],
+  tab: 'summary',
+  sort: { key: 'score', asc: true },
+  filter: '', onlyBad: false,
+  detailIdx: -1, detailMode: 'structured', detailRaw: false, detailShowCovered: true,
+  common: { q: '', type: 'all', min: 1, group: true },
+  query: { mode: 'contains', q: '', regex: false, scope: 'norm', sec: '' },
+};
+
+function analyze(){
+  S.rules = compileRules(settings);
+  $('#ruleErr').textContent = S.rules.errors.join('  ·  ');
+  if (!S.baseFile){ S.base = null; S.results = S.files.map(f => ({ file: f, parsed: parseConfig(f.raw, S.rules), cmp: null })); S.agg = S.aggFlat = S.aggGrouped = []; return; }
+  S.base = parseConfig(S.baseFile.raw, S.rules);
+  S.results = S.files.map(f => { const parsed = parseConfig(f.raw, S.rules); return { file: f, parsed, cmp: compare(S.base, parsed) }; });
+  buildAgg();
+}
+
+const IF_RE = /^(interface\s+[A-Za-z][A-Za-z\-]*?)[\d\/\.:]+$/i;
+function groupEntry(e){
+  if (!IF_RE.test(e.path[0])) return e;
+  const g = e.path[0].replace(IF_RE, '$1*');
+  const path = [g, ...e.path.slice(1)];
+  return Object.assign({}, e, { path, key: path.join(SEP), sec: g, text: e.depth === 0 ? g : e.text, grouped: true });
+}
+function buildAgg(){ S.aggFlat = aggregate(false); S.aggGrouped = aggregate(true); S.agg = S.common.group ? S.aggGrouped : S.aggFlat; }
+function aggregate(group){
+  const m = new Map();
+  S.results.forEach((r, idx) => {
+    for (const d0 of r.cmp.devs){
+      if (d0.covered) continue;
+      const d = group ? Object.assign({}, d0, { e: groupEntry(d0.e) }) : d0;
+      const isBase = d.type !== 'extra';
+      const k = (isBase ? 'B' : 'X') + d.e.key;
+      let a = m.get(k);
+      if (!a){
+        const src = isBase ? S.base : r.parsed;
+        const kids = d.e.grouped ? 0 : src.entries.filter(x => x.key.startsWith(d.e.key + SEP)).length;
+        a = { kind: isBase ? 'baseline' : 'extra', e: d.e, files: [], inst: 0, variants: new Map(), kids };
+        m.set(k, a);
+      }
+      a.inst++;
+      if (a.files[a.files.length-1] !== idx) a.files.push(idx);
+      const vt = d.type === 'changed' ? d.other.text : d.type === 'missing' ? '(absent)' : '(present)';
+      if (!a.variants.has(vt)) a.variants.set(vt, []);
+      const vl = a.variants.get(vt); if (vl[vl.length-1] !== idx) vl.push(idx);
+    }
+  });
+  return [...m.values()].sort((a,b)=> b.files.length - a.files.length || b.inst - a.inst || natCmp(a.e.sec, b.e.sec));
+}
+
+let analyzeTimer = null;
+function reanalyze(delay=0){
+  clearTimeout(analyzeTimer);
+  busy(true);
+  analyzeTimer = setTimeout(()=>{ analyze(); renderAll(); busy(false); }, delay || 30);
+}
+
+/* =========================================================================
+   File loading
+   ========================================================================= */
+const MAX_BYTES = 25 * 1024 * 1024;
+async function readFiles(fileList){
+  const out = [];
+  for (const f of fileList){
+    if (f.size > MAX_BYTES) continue;
+    if (/(^|\/)\.[^/]+$/.test(f.webkitRelativePath || f.name)) continue;     // dotfiles
+    if (/\.(png|jpe?g|gif|zip|gz|7z|pdf|xlsx?|docx?|exe|bin|tar)$/i.test(f.name)) continue;
+    const raw = await f.text();
+    if (raw.slice(0, 4000).includes('\u0000')) continue;                      // binary
+    out.push({ name: f.webkitRelativePath || f.name, raw });
+  }
+  return out;
+}
+async function entriesFromDrop(dt){
+  const items = [...(dt.items || [])].map(it => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if (!items.length) return [...dt.files];
+  const files = [];
+  async function walk(entry, prefix){
+    if (entry.isFile){
+      const f = await new Promise((res, rej) => entry.file(res, rej));
+      try { Object.defineProperty(f, 'webkitRelativePath', { value: prefix + f.name }); } catch(e){}
+      files.push(f);
+    } else if (entry.isDirectory){
+      const reader = entry.createReader();
+      let batch;
+      do { batch = await new Promise((res, rej) => reader.readEntries(res, rej)); for (const e of batch) await walk(e, prefix + entry.name + '/'); } while (batch.length);
+    }
+  }
+  for (const it of items) await walk(it, '');
+  return files;
+}
+function addFiles(list){
+  const names = new Set(S.files.map(f=>f.name));
+  let added = 0;
+  for (const f of list){ if (names.has(f.name)) { S.files = S.files.filter(x=>x.name!==f.name); } S.files.push(f); added++; }
+  S.files.sort((a,b)=>natCmp(a.name,b.name));
+  toast(`Loaded ${added} file${added===1?'':'s'}`);
+  reanalyze();
+}
+function setBaseline(f){ S.baseFile = f; S.detailIdx = -1; reanalyze(); }
+
+function wireDrop(el, onFiles){
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('over'); });
+  el.addEventListener('dragleave', () => el.classList.remove('over'));
+  el.addEventListener('drop', async e => {
+    e.preventDefault(); el.classList.remove('over'); busy(true);
+    const files = await entriesFromDrop(e.dataTransfer);
+    onFiles(await readFiles(files)); busy(false);
+  });
+}
+wireDrop($('#dropBase'), fs => { if (fs.length) setBaseline(fs[0]); if (fs.length > 1) addFiles(fs.slice(1)); });
+wireDrop($('#dropSet'), fs => addFiles(fs));
+$('#inBase').onchange = async e => { const fs = await readFiles(e.target.files); if (fs[0]) setBaseline(fs[0]); e.target.value=''; };
+$('#inSet').onchange = async e => { busy(true); addFiles(await readFiles(e.target.files)); e.target.value=''; };
+$('#inDir').onchange = async e => { busy(true); addFiles(await readFiles(e.target.files)); e.target.value=''; };
+$('#btnClear').onclick = () => { S.baseFile=null; S.files=[]; S.detailIdx=-1; reanalyze(); };
+$('#btnDemo').onclick = () => { const d = makeDemo(); S.baseFile = d.base; S.files = d.files; S.detailIdx=-1; toast('Demo: 1 golden template + 120 access switches'); reanalyze(); };
+
+/* settings wiring */
+function fillSettingsUI(){
+  $('#optSecrets').checked = settings.maskSecrets; $('#optIPs').checked = settings.maskIPs; $('#optCase').checked = settings.caseInsensitive;
+  $('#txtIgnore').value = settings.ignore; $('#txtSections').value = settings.sections; $('#txtSubs').value = settings.subs;
+}
+fillSettingsUI();
+function onSettingsChange(){
+  settings.maskSecrets = $('#optSecrets').checked; settings.maskIPs = $('#optIPs').checked; settings.caseInsensitive = $('#optCase').checked;
+  settings.ignore = $('#txtIgnore').value; settings.sections = $('#txtSections').value; settings.subs = $('#txtSubs').value;
+  saveSettings(); reanalyze(450);
+}
+['#optSecrets','#optIPs','#optCase'].forEach(s => $(s).addEventListener('change', onSettingsChange));
+['#txtIgnore','#txtSections','#txtSubs'].forEach(s => $(s).addEventListener('input', onSettingsChange));
+$('#btnReset').onclick = () => { settings = Object.assign({}, DEFAULTS); fillSettingsUI(); saveSettings(); reanalyze(); };
+
+/* tabs */
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (!b) return; S.tab = b.dataset.tab; renderAll(); });
+
+/* =========================================================================
+   Rendering
+   ========================================================================= */
+function renderAll(){
+  renderLoadState(); renderCards();
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.tab === S.tab));
+  $('#cntFiles').textContent = S.files.length;
+  $('#cntDev').textContent = S.agg.length;
+  $('#cntDetail').textContent = S.detailIdx >= 0 && S.results[S.detailIdx] ? shortName(S.results[S.detailIdx].file.name) : '—';
+  const p = $('#pane');
+  if (S.tab === 'summary') p.innerHTML = renderSummary();
+  else if (S.tab === 'common') p.innerHTML = renderCommon();
+  else if (S.tab === 'query') { p.innerHTML = renderQueryShell(); runQuery(); }
+  else p.innerHTML = renderDetail();
+  bindPane();
+}
+function shortName(n){ const s = n.split('/').pop(); return s.length > 26 ? s.slice(0,24)+'…' : s; }
+
+function renderLoadState(){
+  $('#baseState').innerHTML = S.baseFile
+    ? `${esc(S.baseFile.name)} <span class="hint">· ${S.base ? S.base.entries.length + ' comparable lines · ' + S.base.format + ' format' + (S.base.hostname ? ' · host ' + esc(S.base.hostname) : '') : ''}</span>`
+    : '<span class="hint">Drop the golden config here, or pick a file.</span>';
+  $('#setState').innerHTML = S.files.length
+    ? `${S.files.length} file${S.files.length===1?'':'s'} loaded <span class="hint">· ${(S.files.reduce((a,f)=>a+f.raw.length,0)/1024).toFixed(0)} KB</span>`
+    : '<span class="hint">Drop many files or a whole folder here (.cfg, .txt, .conf, show run output…).</span>';
+  $('#setList').textContent = S.files.slice(0,400).map(f=>f.name).join('  ·  ') + (S.files.length>400 ? '  …' : '');
+}
+
+function renderCards(){
+  const c = $('#cards');
+  if (!S.base || !S.results.length){ c.innerHTML=''; return; }
+  const n = S.results.length;
+  const clean = S.results.filter(r => r.cmp.total === 0).length;
+  const fullBase = S.results.filter(r => r.cmp.nMiss + r.cmp.nChg === 0).length;
+  const avg = S.results.reduce((a,r)=>a+r.cmp.score,0)/n;
+  const worst = [...S.results].sort((a,b)=>a.cmp.score-b.cmp.score)[0];
+  const top = S.agg[0];
+  c.innerHTML = `
+    <div class="card"><div class="k">Configs checked</div><div class="v">${n}</div></div>
+    <div class="card"><div class="k">Exact match to baseline</div><div class="v">${clean} <small>/ ${n}</small></div><div class="hint">${fullBase} contain every baseline line</div></div>
+    <div class="card"><div class="k">Average compliance</div><div class="v" style="color:${scoreColor(avg)}">${fmtPct(avg)}</div></div>
+    <div class="card"><div class="k">Lowest score</div><div class="v" style="color:${scoreColor(worst.cmp.score)}">${fmtPct(worst.cmp.score)} <small>${esc(shortName(worst.file.name))}</small></div></div>
+    <div class="card"><div class="k">Most common deviation</div><div class="v mono">${top ? `<span class="tag ${top.kind==='extra'?'extra':'miss'}">${top.files.length}/${n}</span> ${esc(top.e.text)}` : '<span class="hint">none 🎉</span>'}</div></div>`;
+}
+
+function emptyMsg(){
+  if (!S.baseFile && !S.files.length) return `<div class="empty"><b>Load a baseline and some configs to begin</b><br><br>Or click <b>Load demo data</b> to try it with 120 generated access-switch configs.</div>`;
+  if (!S.baseFile) return `<div class="empty"><b>Pick a baseline.</b> Drop a known-good config in box 1 — or use <b>“Set as baseline”</b> on any file below.</div>` + renderBarelist();
+  return `<div class="empty"><b>Baseline loaded.</b> Now drop the configs to compare into box 2.</div>`;
+}
+function renderBarelist(){
+  if (!S.files.length) return '';
+  return `<div class="tablewrap"><table><thead><tr><th>File</th><th>Hostname</th><th>Lines</th><th></th></tr></thead><tbody>${
+    S.results.map((r,i)=>`<tr><td class="mono">${esc(r.file.name)}</td><td class="mono">${esc(r.parsed.hostname)}</td><td class="num">${r.parsed.entries.length}</td><td><button class="btn sm" data-setbase="${i}">Set as baseline</button></td></tr>`).join('')
+  }</tbody></table></div>`;
+}
+
+/* ---------- Summary ---------- */
+function summaryRows(){
+  const f = S.filter.toLowerCase();
+  let rows = S.results.map((r,i)=>({r,i})).filter(({r}) => (!f || r.file.name.toLowerCase().includes(f) || r.parsed.hostname.toLowerCase().includes(f)) && (!S.onlyBad || r.cmp.total > 0));
+  const k = S.sort.key, dir = S.sort.asc ? 1 : -1;
+  const val = ({r}) => ({ name: r.file.name, host: r.parsed.hostname, score: r.cmp.score, miss: r.cmp.nMiss, chg: r.cmp.nChg, extra: r.cmp.nExtra, secs: r.cmp.nSecs, lines: r.parsed.entries.length }[k]);
+  rows.sort((a,b)=>{ const va=val(a), vb=val(b); const c = typeof va === 'number' ? va-vb : natCmp(va,vb); return c*dir || natCmp(a.r.file.name,b.r.file.name); });
+  return rows;
+}
+function renderSummary(){
+  if (!S.base || !S.results.length) return emptyMsg();
+  const rows = summaryRows();
+  const th = (k, label, cls='') => `<th data-sort="${k}" class="${cls} ${S.sort.key===k?'sorted'+(S.sort.asc?' asc':''):''}">${label}</th>`;
+  const n = v => v ? v : `<span class="zero">0</span>`;
+  return `
+  <div class="toolbar">
+    <input type="text" id="fltName" placeholder="Filter by file name or hostname…" value="${esc(S.filter)}">
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="fltBad" ${S.onlyBad?'checked':''}> Only files with differences</label>
+    <span class="grow"></span>
+    <span class="hint">${rows.length} shown · click a row for details</span>
+    ${exportButtons('summary','summary CSV')} ${exportButtons('alldevs','all differences CSV')}
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr>${th('name','File')}${th('host','Hostname')}${th('score','Compliance')}${th('miss','Missing')}${th('chg','Changed')}${th('extra','Extra')}${th('secs','Sections')}${th('lines','Lines')}<th></th></tr></thead>
+    <tbody>${rows.map(({r,i}) => `
+      <tr class="clk" data-open="${i}">
+        <td class="mono">${esc(r.file.name)}</td>
+        <td class="mono">${esc(r.parsed.hostname)}</td>
+        <td><div class="bar"><div class="track"><div class="fill" style="width:${r.cmp.score}%;background:${scoreColor(r.cmp.score)}"></div></div><span style="color:${scoreColor(r.cmp.score)}">${fmtPct(r.cmp.score)}</span>${r.cmp.total===0?' <span class="tag ok">match</span>':''}</div></td>
+        <td class="num n-miss">${n(r.cmp.nMiss)}</td><td class="num n-chg">${n(r.cmp.nChg)}</td><td class="num n-extra">${n(r.cmp.nExtra)}</td>
+        <td class="num">${n(r.cmp.nSecs)}</td><td class="num">${r.parsed.entries.length}</td>
+        <td><button class="btn sm" data-setbase="${i}" title="Use this file as the baseline">Set as baseline</button></td>
+      </tr>`).join('')}
+    </tbody></table></div>
+  <p class="hint">Compliance = share of baseline lines found in the file (after normalization). <b>Changed</b> = a baseline line whose value differs (e.g. <span class="mono">logging host 10.10.5.50 → .51</span>). <b>Extra</b> = lines not in the baseline. Line order never matters.</p>`;
+}
+
+/* ---------- Common deviations ---------- */
+function renderCommon(){
+  if (!S.base || !S.results.length) return emptyMsg();
+  const n = S.results.length, C = S.common, q = C.q.toLowerCase();
+  const list = S.agg.filter(a => (C.type==='all' || (C.type==='baseline' ? a.kind==='baseline' : a.kind==='extra')) && a.files.length >= C.min &&
+    (!q || a.e.text.toLowerCase().includes(q) || a.e.sec.toLowerCase().includes(q)));
+  const shown = list.slice(0, 400);
+  return `
+  <div class="toolbar">
+    <input type="text" id="cmQ" placeholder="Search lines or sections…" value="${esc(C.q)}">
+    <select id="cmType">
+      <option value="all" ${C.type==='all'?'selected':''}>All deviations</option>
+      <option value="baseline" ${C.type==='baseline'?'selected':''}>Baseline lines not matched</option>
+      <option value="extra" ${C.type==='extra'?'selected':''}>Extra lines (not in baseline)</option>
+    </select>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px" title="Roll up per-port differences: interface GigabitEthernet1/0/13 → interface GigabitEthernet*"><input type="checkbox" id="cmGroup" ${C.group?'checked':''}> Group interfaces</label>
+    <label class="hint">Seen in at least <input type="number" id="cmMin" min="1" value="${C.min}" style="width:64px"> files</label>
+    <span class="grow"></span><span class="hint">${list.length} unique deviations</span>
+    ${exportButtons('common','CSV')}
+  </div>
+  ${shown.length ? shown.map((a, i) => {
+    const pct = a.files.length / n * 100;
+    const isB = a.kind === 'baseline';
+    const sub = a.e.depth > 0 ? a.e.path.slice(0,-1).join(' › ') : (a.e.global ? 'global' : '');
+    const variants = [...a.variants.entries()].sort((x,y)=>y[1].length-x[1].length);
+    return `<div class="dev" data-dev="${i}">
+      <div class="h">
+        <span class="pct" style="color:${isB?'var(--miss)':'var(--extra)'}">${a.files.length} <span class="hint">/ ${n} · ${fmtPct(pct)}</span>${a.inst > a.files.length ? `<br><span class="hint" style="font-weight:400">${a.inst} ports</span>` : ''}</span>
+        <span class="tag ${isB ? (variants.some(v=>v[0]!=='(absent)') ? 'chg' : 'miss') : 'extra'}">${isB ? (variants.every(v=>v[0]==='(absent)') ? 'missing' : 'missing / changed') : 'extra'}</span>
+        <span class="ln">${esc(a.e.text)}${a.kids ? ` <span class="hint">+ ${a.kids} nested line${a.kids===1?'':'s'}</span>` : ''}</span>
+        <span class="sec">${esc(sub)}</span>
+      </div>
+      <div class="b">${variants.map(([vt, idxs]) => `
+        <div class="variant"><div class="vt">${vt==='(absent)' ? '<span class="tag miss">absent</span> line not present' : vt==='(present)' ? '<span class="tag extra">present</span> in these files' : `<span class="tag chg">changed to</span> ${esc(vt)}`} <span class="hint">· ${idxs.length} file${idxs.length===1?'':'s'}</span></div>
+        <div class="chips">${idxs.map(ix => `<span class="chip" data-open="${ix}">${esc(S.results[ix].parsed.hostname || shortName(S.results[ix].file.name))}</span>`).join('')}</div></div>`).join('')}
+      </div></div>`;
+  }).join('') + (list.length > shown.length ? `<p class="hint">Showing first 400 of ${list.length}. Narrow with the search box.</p>` : '')
+  : `<div class="empty"><b>No deviations match.</b>${S.agg.length===0?'<br>Every file matches the baseline.':''}</div>`}`;
+}
+
+/* ---------- Query ---------- */
+function renderQueryShell(){
+  const Q = S.query;
+  const files = S.results.length;
+  if (!files) return emptyMsg();
+  return `
+  <div class="toolbar">
+    <div class="seg" id="qMode">
+      <button data-m="contains" class="${Q.mode==='contains'?'on':''}">Files containing</button>
+      <button data-m="lacks" class="${Q.mode==='lacks'?'on':''}">Files NOT containing</button>
+      <button data-m="variants" class="${Q.mode==='variants'?'on':''}">Section variants</button>
+    </div>
+    <input type="text" id="qText" class="grow" placeholder="${Q.mode==='variants' ? 'Section header regex, e.g.  ^line vty   or   ^interface TenGig' : 'Text or regex (a leading ^ or trailing $ turns on regex), e.g.  transport input   or   ^ntp server'}" value="${esc(Q.q)}" style="font-family:var(--mono)">
+    ${Q.mode!=='variants' ? `<input type="text" id="qSec" placeholder="…within section (optional regex)" value="${esc(Q.sec)}" style="min-width:200px;font-family:var(--mono)">` : ''}
+    <label style="display:flex;gap:5px;align-items:center;font-size:13px"><input type="checkbox" id="qRegex" ${Q.regex||Q.mode==='variants'?'checked':''} ${Q.mode==='variants'?'disabled':''}> Regex</label>
+    ${Q.mode!=='variants' ? `<select id="qScope"><option value="norm" ${Q.scope==='norm'?'selected':''}>Normalized lines</option><option value="raw" ${Q.scope==='raw'?'selected':''}>Raw lines</option></select>` : ''}
+  </div>
+  <div class="hint" style="margin-bottom:10px">${Q.mode==='variants'
+    ? 'Groups every file by the exact content of the matching section(s) — the fastest way to see how many different versions of, say, your VTY or uplink config exist across the fleet.'
+    : 'Searches every loaded config (baseline included for reference). Matches are shown with their parent section. Case-insensitive.'}</div>
+  <div id="qOut"></div>`;
+}
+function runQuery(){
+  const out = $('#qOut'); if (!out) return;
+  const Q = S.query;
+  if (!Q.q.trim()){ out.innerHTML = `<div class="empty">Type a query above.<br><br><span class="hint">Examples: <span class="mono">ip http server</span> · <span class="mono">^logging host</span> · <span class="mono">spanning-tree bpduguard</span> · section variants of <span class="mono">^line vty</span></span></div>`; return; }
+  let re;
+  const autoRe = /^\^|\$$/.test(Q.q.trim());
+  try { re = (Q.regex || autoRe || Q.mode==='variants') ? new RegExp(Q.q, 'i') : new RegExp(Q.q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'i'); }
+  catch(e){ out.innerHTML = `<div class="err">Invalid regex: ${esc(e.message)}</div>`; return; }
+  let secRe = null;
+  if (Q.sec && Q.mode !== 'variants'){ try { secRe = new RegExp(Q.sec, 'i'); } catch(e){ out.innerHTML = `<div class="err">Invalid section regex: ${esc(e.message)}</div>`; return; } }
+
+  if (Q.mode === 'variants'){
+    const groups = new Map();
+    const all = S.results.map((r,i)=>({ p: r.parsed, i, name: r.file.name }));
+    for (const { p, i } of all){
+      const lines = p.entries.filter(e => !e.global && re.test(e.sec));
+      const sig = lines.length ? lines.map(e => '  '.repeat(e.depth) + e.text).join('\n') : '(section not present)';
+      if (!groups.has(sig)) groups.set(sig, []);
+      groups.get(sig).push(i);
+    }
+    const baseSig = S.base ? (S.base.entries.filter(e => !e.global && re.test(e.sec)).map(e => '  '.repeat(e.depth) + e.text).join('\n') || '(section not present)') : null;
+    const arr = [...groups.entries()].sort((a,b)=>b[1].length-a[1].length);
+    out.innerHTML = `<p class="hint">${arr.length} distinct variant${arr.length===1?'':'s'} across ${all.length} files.</p>` + arr.map(([sig, idxs], k) => `
+      <div class="qres"><div class="qh"><b>Variant ${k+1}</b> <span class="hint">${idxs.length} file${idxs.length===1?'':'s'}</span> ${sig===baseSig ? '<span class="tag ok">matches baseline</span>' : (baseSig ? '<span class="tag chg">differs from baseline</span>' : '')}</div>
+      <div class="ql" style="padding:8px 12px">${esc(sig)}</div>
+      <div style="padding:6px 12px 10px" class="chips">${idxs.map(ix => `<span class="chip" data-open="${ix}">${esc(S.results[ix].parsed.hostname || shortName(S.results[ix].file.name))}</span>`).join('')}</div></div>`).join('');
+    return;
+  }
+
+  const hits = [];
+  const search = (p, raw) => {
+    const found = [];
+    if (Q.scope === 'raw'){
+      const lines = raw.replace(/\r\n?/g,'\n').split('\n');
+      lines.forEach((l, j) => { if (re.test(l)) found.push({ ctx: '', text: l.trimEnd(), lineNo: j+1 }); });
+    } else {
+      for (const e of p.entries){
+        if (secRe && !secRe.test(e.sec)) continue;
+        if (re.test(e.text)) found.push({ ctx: e.depth ? e.path.slice(0,-1).join(' › ') : '', text: e.text, lineNo: e.lineNo });
+      }
+    }
+    return found;
+  };
+  S.results.forEach((r, i) => { hits.push({ i, name: r.file.name, host: r.parsed.hostname, found: search(r.parsed, r.file.raw) }); });
+  const baseFound = S.base ? search(S.base, S.baseFile.raw) : null;
+  const sel = Q.mode === 'contains' ? hits.filter(h => h.found.length) : hits.filter(h => !h.found.length);
+  const safeHl = s => { try { const g = new RegExp(re.source, 'gi'); return s.replace(g, m => '\u0001' + m + '\u0002').split(/(\u0001[^\u0002]*\u0002)/).map(part => part.startsWith('\u0001') ? '<mark>' + esc(part.slice(1,-1)) + '</mark>' : esc(part)).join(''); } catch(e){ return esc(s); } };
+  out.innerHTML = `
+    <div class="toolbar"><b>${sel.length}</b> of ${hits.length} files ${Q.mode==='contains'?'contain':'do not contain'} a match.
+      ${baseFound ? (baseFound.length ? '<span class="tag ok">baseline contains it</span>' : '<span class="tag gray">baseline does not contain it</span>') : ''}
+      <span class="grow"></span>${exportButtons('query','results CSV')}</div>
+    ${Q.mode==='lacks'
+      ? `<div class="chips">${sel.map(h => `<span class="chip" data-open="${h.i}">${esc(h.host || shortName(h.name))}</span>`).join('')}</div>`
+      : sel.slice(0,300).map(h => `
+      <div class="qres"><div class="qh" data-open="${h.i}"><span class="mono">${esc(h.name)}</span> <span class="hint">${esc(h.host)} · ${h.found.length} match${h.found.length===1?'':'es'}</span></div>
+      ${h.found.slice(0,25).map(f => `<div class="ql">${f.ctx ? `<span class="ctx">${esc(f.ctx)} › </span>` : ''}${safeHl(f.text)} <span class="hint">L${f.lineNo}</span></div>`).join('')}
+      ${h.found.length>25 ? `<div class="ql hint">… ${h.found.length-25} more</div>` : ''}</div>`).join('')}`;
+  S._lastQuery = { sel, mode: Q.mode };
+  bindPane();
+}
+
+/* ---------- Detail ---------- */
+function renderDetail(){
+  if (!S.base || !S.results.length) return emptyMsg();
+  if (S.detailIdx < 0 || !S.results[S.detailIdx]) return `<div class="empty"><b>No file selected.</b><br>Click a row in <b>Fleet summary</b> or a chip in <b>Common deviations</b> / <b>Query</b>.</div>`;
+  const r = S.results[S.detailIdx], c = r.cmp;
+  const order = summaryRows().map(x=>x.i), pos = order.indexOf(S.detailIdx);
+  const head = `
+    <div class="dhead">
+      <button class="btn sm" data-nav="-1" ${pos<=0?'disabled':''} title="Previous (k)">◀</button>
+      <button class="btn sm" data-nav="1" ${pos<0||pos>=order.length-1?'disabled':''} title="Next (j)">▶</button>
+      <h2>${esc(r.file.name)}</h2>
+      <span class="hint">${esc(r.parsed.hostname)} · vs <span class="mono">${esc(S.baseFile.name)}</span></span>
+      <span style="color:${scoreColor(c.score)};font-weight:700">${fmtPct(c.score)}</span>
+      <span class="tag miss">${c.nMiss} missing</span><span class="tag chg">${c.nChg} changed</span><span class="tag extra">${c.nExtra} extra</span>
+      <span class="grow" style="flex:1"></span>
+      <div class="seg" id="dMode"><button data-m="structured" class="${S.detailMode==='structured'?'on':''}">By section</button><button data-m="lines" class="${S.detailMode==='lines'?'on':''}">Side-by-side</button></div>
+      ${exportButtons('report','report')}
+    </div>`;
+  return head + (S.detailMode === 'structured' ? renderStructured(r) : renderLineDiff(r));
+}
+function renderStructured(r){
+  const c = r.cmp;
+  if (!c.devs.length) return `<div class="empty"><b>✓ Identical to the baseline</b> after normalization.</div>`;
+  const secOrder = new Map(); S.base.entries.forEach((e,i)=>{ if(!secOrder.has(e.sec)) secOrder.set(e.sec, i); });
+  r.parsed.entries.forEach((e,i)=>{ if(!secOrder.has(e.sec)) secOrder.set(e.sec, 1e6+i); });
+  const groups = new Map();
+  for (const d of c.devs){ if (!groups.has(d.e.sec)) groups.set(d.e.sec, []); groups.get(d.e.sec).push(d); }
+  const secs = [...groups.keys()].sort((a,b)=>secOrder.get(a)-secOrder.get(b));
+  return `<div class="hint" style="margin-bottom:10px"><span class="n-miss">−</span> in baseline, missing here · <span class="n-chg">~</span> value differs · <span class="n-extra">+</span> only in this file. Keys: <kbd>j</kbd>/<kbd>k</kbd> next/previous file.</div>` +
+  secs.map(sec => {
+    const ds = groups.get(sec).sort((a,b)=> (a.e.lineNo - b.e.lineNo) + (a.type==='extra')-(b.type==='extra'));
+    const headerMissing = ds.find(d => d.e.depth===0 && !d.e.global && d.type==='missing');
+    const headerExtra = ds.find(d => d.e.depth===0 && !d.e.global && d.type==='extra');
+    const glob = ds[0].e.global;
+    return `<div class="sect"><div class="sh">${esc(sec)} ${glob?'<span class="glob">global lines</span>':''}
+      ${headerMissing ? '<span class="tag miss">section missing</span>' : headerExtra ? '<span class="tag extra">section only in this file</span>' : ''}</div>
+      ${ds.map(d => {
+        const pad = '  '.repeat(Math.max(0, d.e.depth - (glob?0:1)));
+        const showText = (d.e.depth===0 && !glob) ? d.e.text : pad + d.e.text;
+        if (d.type==='changed') return `<div class="dl c"><span class="s">~</span><span>${esc(pad + d.e.text)} <span class="arrow">→</span> ${esc(d.other.text)}</span><span class="lnno">L${d.e.lineNo} → L${d.other.lineNo}</span></div>`;
+        const cls = d.type==='missing' ? 'm' : 'e', sym = d.type==='missing' ? '−' : '+';
+        return `<div class="dl ${cls}"><span class="s">${sym}</span><span>${esc(showText)}</span><span class="lnno">${d.type==='missing'?'base ':''}L${d.e.lineNo}</span></div>`;
+      }).join('')}</div>`;
+  }).join('');
+}
+
+/* Myers diff (O((N+M)D)), with a cap on D */
+function myers(a, b, limit){
+  const n=a.length, m=b.length, max=n+m, off=max+1;
+  const V = new Int32Array(2*max+3); const trace = [];
+  for (let d=0; d<=max; d++){
+    if (d > limit) return null;
+    for (let k=-d; k<=d; k+=2){
+      let x = (k===-d || (k!==d && V[off+k-1] < V[off+k+1])) ? V[off+k+1] : V[off+k-1]+1;
+      let y = x-k;
+      while (x<n && y<m && a[x]===b[y]){ x++; y++; }
+      V[off+k] = x;
+      if (x>=n && y>=m){
+        const snap = new Int32Array(2*d+1); for (let kk=-d; kk<=d; kk++) snap[kk+d] = V[off+kk]; trace.push(snap);
+        return backtrack(trace, n, m);
+      }
+    }
+    const snap = new Int32Array(2*d+1); for (let k=-d; k<=d; k++) snap[k+d] = V[off+k]; trace.push(snap);
+  }
+  return null;
+}
+function backtrack(trace, n, m){
+  const ops = []; let x=n, y=m;
+  for (let d=trace.length-1; d>0; d--){
+    const v = trace[d-1], k = x-y, g = i => v[i+(d-1)];
+    const prevK = (k===-d || (k!==d && g(k-1) < g(k+1))) ? k+1 : k-1;
+    const px = g(prevK), py = px-prevK;
+    while (x>px && y>py){ ops.push(['=', x-1, y-1]); x--; y--; }
+    if (prevK === k+1) ops.push(['+', -1, y-1]); else ops.push(['-', x-1, -1]);
+    x = px; y = py;
+  }
+  while (x>0 && y>0){ ops.push(['=', x-1, y-1]); x--; y--; }
+  return ops.reverse();
+}
+function renderLineDiff(r){
+  const raw = S.detailRaw;
+  const A = raw ? S.baseFile.raw.replace(/\r\n?/g,'\n').split('\n').map((t,i)=>({text:t.trimEnd(), lineNo:i+1})) : S.base.viewLines;
+  const B = raw ? r.file.raw.replace(/\r\n?/g,'\n').split('\n').map((t,i)=>({text:t.trimEnd(), lineNo:i+1})) : r.parsed.viewLines;
+  const ops = myers(A.map(x=>x.text), B.map(x=>x.text), 4000);
+  const toggle = `<div class="toolbar"><label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="dRaw" ${raw?'checked':''}> Show raw files (no normalization / ignore rules)</label>
+    <span class="hint">Order-sensitive view. Use “By section” for order-independent results. Unchanged runs are collapsed — click to expand.</span></div>`;
+  if (!ops) return toggle + `<div class="empty">Files differ too much for a line-by-line view. Use “By section”.</div>`;
+  // merge adjacent -/+ into modified rows
+  const rows = [];
+  for (let i=0; i<ops.length; ){
+    if (ops[i][0] === '='){ rows.push({t:'=', a:A[ops[i][1]], b:B[ops[i][2]]}); i++; continue; }
+    const dels=[], ins=[];
+    while (i<ops.length && ops[i][0] !== '='){ if (ops[i][0]==='-') dels.push(A[ops[i][1]]); else ins.push(B[ops[i][2]]); i++; }
+    const n = Math.max(dels.length, ins.length);
+    for (let j=0;j<n;j++) rows.push({ t: dels[j] && ins[j] ? 'mod' : dels[j] ? 'del' : 'ins', a: dels[j], b: ins[j] });
+  }
+  const CTX = 3, out = [];
+  const expanded = S._expanded || (S._expanded = new Set());
+  let i = 0;
+  while (i < rows.length){
+    if (rows[i].t !== '='){ out.push(rows[i]); i++; continue; }
+    let j = i; while (j < rows.length && rows[j].t === '=') j++;
+    const run = j - i, head = i === 0 ? 0 : CTX, tail = j === rows.length ? 0 : CTX;
+    const gid = r.file.name + ':' + i;
+    if (run > head + tail + 2 && !expanded.has(gid)){
+      for (let k=i; k<i+head; k++) out.push(rows[k]);
+      out.push({ t:'gap', n: run-head-tail, gid });
+      for (let k=j-tail; k<j; k++) out.push(rows[k]);
+    } else for (let k=i; k<j; k++) out.push(rows[k]);
+    i = j;
+  }
+  const changes = rows.filter(x=>x.t!=='=').length;
+  return toggle + `<div class="hint" style="margin-bottom:6px">${changes} differing line${changes===1?'':'s'} · left: <span class="mono">${esc(S.baseFile.name)}</span> · right: <span class="mono">${esc(r.file.name)}</span></div>
+  <div class="tablewrap" style="max-height:none"><table class="sbs"><colgroup><col style="width:46px"><col><col style="width:46px"><col></colgroup><tbody>${out.map(x => x.t==='gap'
+    ? `<tr class="gap" data-gap="${esc(x.gid)}"><td colspan="4">⋯ ${x.n} unchanged lines ⋯</td></tr>`
+    : `<tr class="${x.t==='='?'':x.t}"><td class="no">${x.a?x.a.lineNo:''}</td><td class="l">${x.a?esc(x.a.text):''}</td><td class="no">${x.b?x.b.lineNo:''}</td><td class="r">${x.b?esc(x.b.text):''}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ---------- Exports ---------- */
+function exportData(id){
+  const n = S.results.length;
+  if (id === 'summary') return { name:'configdrift-summary.csv', text: csv([['file','hostname','compliance_pct','missing','changed','extra','sections_affected','lines'],
+    ...summaryRows().map(({r}) => [r.file.name, r.parsed.hostname, r.cmp.score.toFixed(2), r.cmp.nMiss, r.cmp.nChg, r.cmp.nExtra, r.cmp.nSecs, r.parsed.entries.length])]) };
+  if (id === 'alldevs'){
+    const rows = [['file','hostname','type','section','path','baseline_line','file_line','baseline_line_no','file_line_no']];
+    for (const r of S.results) for (const d of r.cmp.devs){
+      const path = d.e.path.slice(0,-1).join(' > ');
+      if (d.type==='changed') rows.push([r.file.name, r.parsed.hostname, 'changed', d.e.sec, path, d.e.text, d.other.text, d.e.lineNo, d.other.lineNo]);
+      else if (d.type==='missing') rows.push([r.file.name, r.parsed.hostname, 'missing', d.e.sec, path, d.e.text, '', d.e.lineNo, '']);
+      else rows.push([r.file.name, r.parsed.hostname, 'extra', d.e.sec, path, '', d.e.text, '', d.e.lineNo]);
+    }
+    return { name:'configdrift-differences.csv', text: csv(rows) };
+  }
+  if (id === 'common') return { name:'configdrift-common-deviations.csv', text: csv([['kind','files','pct_of_fleet','section','path','line','variants','hostnames'],
+    ...S.agg.map(a => [a.kind==='baseline'?'baseline line missing/changed':'extra line', a.files.length, (a.files.length/n*100).toFixed(1), a.e.sec, a.e.path.slice(0,-1).join(' > '), a.e.text,
+      [...a.variants.entries()].map(([v,ix])=>`${v} (${ix.length})`).join(' | '), a.files.map(ix=>S.results[ix].parsed.hostname||S.results[ix].file.name).join(' ')])]) };
+  if (id === 'query'){
+    const L = S._lastQuery; if (!L) return { name:'query.csv', text:'' };
+    return { name:'configdrift-query.csv', text: csv([['file','hostname','matches','lines'], ...L.sel.map(h => [h.name, h.host, h.found.length, h.found.map(f=>f.text).join(' | ')])]) };
+  }
+  if (id === 'report'){
+    const r = S.results[S.detailIdx], c = r.cmp;
+    const lines = [`ConfigDrift report`, `File:      ${r.file.name}`, `Hostname:  ${r.parsed.hostname}`, `Baseline:  ${S.baseFile.name}`,
+      `Score:     ${fmtPct(c.score)}  (missing ${c.nMiss}, changed ${c.nChg}, extra ${c.nExtra})`, ''];
+    const groups = new Map(); for (const d of c.devs){ if(!groups.has(d.e.sec)) groups.set(d.e.sec,[]); groups.get(d.e.sec).push(d); }
+    for (const [sec, ds] of groups){
+      lines.push(`[${sec}]`);
+      for (const d of ds){
+        const pad = '  '.repeat(d.e.depth);
+        if (d.type==='changed') lines.push(`  ~ ${pad}${d.e.text}  ->  ${d.other.text}`);
+        else lines.push(`  ${d.type==='missing'?'-':'+'} ${pad}${d.e.text}`);
+      }
+      lines.push('');
+    }
+    return { name: (r.parsed.hostname || 'file') + '-drift.txt', text: lines.join('\n') };
+  }
+}
+
+/* ---------- Event binding for the active pane ---------- */
+function openDetail(i){ S.detailIdx = i; S.tab = 'detail'; S._expanded = new Set(); renderAll(); window.scrollTo({ top: $('#tabs').offsetTop - 10, behavior: 'smooth' }); }
+function bindPane(){
+  const p = $('#pane');
+  p.onclick = e => {
+    const t = e.target;
+    const sb = t.closest('[data-setbase]');
+    if (sb){ e.stopPropagation(); const i = +sb.dataset.setbase; const f = S.files[i]; const old = S.baseFile;
+      S.files = S.files.filter((_,k)=>k!==i); if (old) { S.files.push(old); S.files.sort((a,b)=>natCmp(a.name,b.name)); }
+      setBaseline(f); toast(`Baseline set to ${f.name}`); return; }
+    const cp = t.closest('[data-copy]'); if (cp){ const d = exportData(cp.dataset.copy); copyText(d.text, d.name); return; }
+    const dl = t.closest('[data-dl]'); if (dl){ const d = exportData(dl.dataset.dl); download(d.name, d.text); return; }
+    const op = t.closest('[data-open]'); if (op){ openDetail(+op.dataset.open); return; }
+    const th = t.closest('th[data-sort]'); if (th){ const k = th.dataset.sort; S.sort = { key:k, asc: S.sort.key===k ? !S.sort.asc : (k==='name'||k==='host'||k==='score') }; renderAll(); return; }
+    const dv = t.closest('.dev .h'); if (dv){ dv.parentElement.classList.toggle('open'); return; }
+    const nv = t.closest('[data-nav]'); if (nv){ navDetail(+nv.dataset.nav); return; }
+    const dm = t.closest('#dMode button'); if (dm){ S.detailMode = dm.dataset.m; renderAll(); return; }
+    const qm = t.closest('#qMode button'); if (qm){ S.query.mode = qm.dataset.m; renderAll(); setTimeout(()=>$('#qText')&&$('#qText').focus(),0); return; }
+    const gp = t.closest('tr.gap'); if (gp){ (S._expanded||(S._expanded=new Set())).add(gp.dataset.gap); renderAll(); return; }
+  };
+  const on = (sel, ev, fn) => { const el = $(sel); if (el) el.addEventListener(ev, fn); };
+  on('#fltName','input', e => { S.filter = e.target.value; const pos = e.target.selectionStart; renderAll(); const el=$('#fltName'); el.focus(); el.setSelectionRange(pos,pos); });
+  on('#fltBad','change', e => { S.onlyBad = e.target.checked; renderAll(); });
+  on('#cmQ','input', e => { S.common.q = e.target.value; const pos=e.target.selectionStart; renderAll(); const el=$('#cmQ'); el.focus(); el.setSelectionRange(pos,pos); });
+  on('#cmType','change', e => { S.common.type = e.target.value; renderAll(); });
+  on('#cmGroup','change', e => { S.common.group = e.target.checked; S.agg = S.common.group ? S.aggGrouped : S.aggFlat; renderAll(); });
+  on('#cmMin','change', e => { S.common.min = Math.max(1, +e.target.value||1); renderAll(); });
+  const qd = () => { clearTimeout(S._qt); S._qt = setTimeout(runQuery, 180); };
+  on('#qText','input', e => { S.query.q = e.target.value; qd(); });
+  on('#qSec','input', e => { S.query.sec = e.target.value; qd(); });
+  on('#qRegex','change', e => { S.query.regex = e.target.checked; runQuery(); });
+  on('#qScope','change', e => { S.query.scope = e.target.value; runQuery(); });
+  on('#dRaw','change', e => { S.detailRaw = e.target.checked; renderAll(); });
+}
+function navDetail(dir){
+  const order = summaryRows().map(x=>x.i); const pos = order.indexOf(S.detailIdx);
+  const np = pos + dir; if (np >= 0 && np < order.length){ S.detailIdx = order[np]; S._expanded = new Set(); renderAll(); }
+}
+document.addEventListener('keydown', e => {
+  if (S.tab !== 'detail' || /input|textarea|select/i.test(e.target.tagName)) return;
+  if (e.key === 'j') navDetail(1); else if (e.key === 'k') navDetail(-1);
+});
+
+/* =========================================================================
+   Demo data — a golden IOS-XE access-switch template and 120 generated
+   switches with realistic drift.
+   ========================================================================= */
+function makeDemo(){
+  let seed = 20261115;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const pick = a => a[Math.floor(rnd()*a.length)];
+  const hex = n => Array.from({length:n}, () => '0123456789ABCDEF'[Math.floor(rnd()*16)]).join('');
+  const sites = ['PHX','TPE','MSA','CHD','SCO'];
+
+  function gen(host, siteIdx, idx, dv){
+    const L = [];
+    const p = s => L.push(s);
+    p('Building configuration...'); p(''); p(`Current configuration : ${10000 + Math.floor(rnd()*4000)} bytes`); p('!');
+    p(`! Last configuration change at ${String(Math.floor(rnd()*24)).padStart(2,'0')}:${String(Math.floor(rnd()*60)).padStart(2,'0')}:11 MST Mon Nov 9 2026 by netadmin`);
+    p('!'); p(`version ${dv.version || '17.9'}`);
+    p('service timestamps debug datetime msec localtime show-timezone'); p('service timestamps log datetime msec localtime show-timezone');
+    if (!dv.noPwEnc) p('service password-encryption');
+    p('no service pad'); p('!'); p(`hostname ${host}`); p('!');
+    p('logging buffered 64000 informational'); p('logging console critical'); p('no logging monitor');
+    p(`enable secret 9 $9$${hex(14)}$${hex(30)}`); p('!');
+    p('aaa new-model'); p('aaa group server tacacs+ ISE'); p(' server name ISE-1'); if (!dv.oneIse) p(' server name ISE-2');
+    p('aaa authentication login default group ISE local'); p('aaa authorization exec default group ISE local');
+    p('aaa accounting commands 15 default start-stop group ISE'); p('!');
+    p('clock timezone MST -7 0'); p('ip domain name corp.example.net'); p('ip name-server 10.10.0.53 10.10.1.53');
+    p(dv.httpOn ? 'ip http server' : 'no ip http server'); p('no ip http secure-server');
+    if (!dv.noSshV2) p('ip ssh version 2');
+    p('ip ssh time-out 60'); p('!');
+    if (!dv.idx0) { p(`crypto pki trustpoint TP-self-signed-${hex(10)}`); p(' enrollment selfsigned'); p(' revocation-check none'); p('!');
+      p(`crypto pki certificate chain TP-self-signed-${hex(10)}`); p(' certificate self-signed 01'); for (let k=0;k<4;k++) p('  ' + Array.from({length:8},()=>hex(8)).join(' ')); p('  \tquit'); p('!'); }
+    p('vlan 10'); p(` name ${dv.vlanName || 'DATA'}`); p('vlan 20'); p(' name VOICE'); p('vlan 99'); p(' name MGMT');
+    if (dv.guestVlan) { p('vlan 30'); p(' name GUEST'); }
+    p('!'); p(`spanning-tree mode ${dv.pvst ? 'pvst' : 'rapid-pvst'}`); p('spanning-tree extend system-id'); p('!');
+    for (let port=1; port<=24; port++){
+      p(`interface GigabitEthernet1/0/${port}`);
+      p(` description ${pick(['USER','PRINTER','AP','PHONE','DESK'])}-${siteIdx}${idx}-${port}`);
+      p(` switchport access vlan ${dv.vlanPort === port ? 30 : 10}`);
+      p(' switchport voice vlan 20'); p(' switchport mode access');
+      if (!(dv.noPortfast||[]).includes(port)) p(' spanning-tree portfast');
+      if (!(dv.noBpdu||[]).includes(port)) p(' spanning-tree bpduguard enable');
+      if (dv.shutPort === port) p(' shutdown');
+      p('!');
+    }
+    p('interface TenGigabitEthernet1/1/1'); p(' description UPLINK-CORE-A'); p(' switchport mode trunk');
+    p(` switchport trunk allowed vlan ${dv.trunkVlans || '10,20,99'}`); p('!');
+    p('interface Vlan1'); p(' no ip address'); p(' shutdown'); p('!');
+    p('interface Vlan99'); p(` ip address 10.99.${siteIdx}.${idx+10} 255.255.255.0`); p('!');
+    p(`ip default-gateway 10.99.${siteIdx}.1`);
+    p('ntp server 10.10.0.123'); if (!dv.oneNtp) p('ntp server 10.10.1.123');
+    p(`logging host ${dv.oldSyslog ? '10.10.5.51' : '10.10.5.50'}`);
+    if (dv.extraSyslog) p('logging host 172.16.9.9');
+    p(`snmp-server community ${hex(12)} RO`); p(`snmp-server location ${sites[siteIdx]} IDF ${idx}`);
+    p(`snmp-server host 10.10.5.60 version 2c ${hex(12)}`); p('!');
+    if (!dv.noBanner) { p('banner motd ^C'); p('Authorized access only. All activity is monitored and logged.'); p('^C'); }
+    p('!'); p('line con 0'); p(` exec-timeout ${dv.conTimeout || '10 0'}`); p(' logging synchronous');
+    p('line vty 0 4'); p(' exec-timeout 10 0'); p(` transport input ${dv.telnet ? 'telnet ssh' : 'ssh'}`);
+    p('line vty 5 15'); p(' exec-timeout 10 0'); p(' transport input ssh'); p('!'); p('end'); p('');
+    return L.join('\n');
+  }
+  const base = { name: 'GOLDEN-access-template.cfg', raw: gen('TEMPLATE-AS', 0, 0, {}) };
+  const files = [];
+  for (let i=0; i<120; i++){
+    const siteIdx = i % 5, idx = Math.floor(i/5) + 1;
+    const host = `${sites[siteIdx]}-IDF${String(idx).padStart(2,'0')}-AS1`;
+    const dv = {};
+    if (rnd()<.12) dv.noPwEnc = true;
+    if (rnd()<.08) dv.httpOn = true;
+    if (rnd()<.10) dv.oldSyslog = true;
+    if (rnd()<.04) dv.extraSyslog = true;
+    if (rnd()<.06) dv.oneNtp = true;
+    if (rnd()<.09) dv.telnet = true;
+    if (rnd()<.14) dv.noBpdu = Array.from({length:1+Math.floor(rnd()*3)}, () => 1+Math.floor(rnd()*24));
+    if (rnd()<.05) dv.noPortfast = [1+Math.floor(rnd()*24)];
+    if (rnd()<.05) { dv.guestVlan = true; dv.vlanPort = 1+Math.floor(rnd()*24); }
+    if (rnd()<.07) dv.conTimeout = '0 0';
+    if (rnd()<.04) dv.noSshV2 = true;
+    if (rnd()<.06) dv.pvst = true;
+    if (rnd()<.03) dv.noBanner = true;
+    if (rnd()<.05) dv.trunkVlans = '10,20,30,99';
+    if (rnd()<.08) dv.version = '17.6';
+    if (rnd()<.03) dv.oneIse = true;
+    if (rnd()<.04) dv.shutPort = 1+Math.floor(rnd()*24);
+    if (rnd()<.03) dv.vlanName = 'USERS';
+    files.push({ name: host + '.cfg', raw: gen(host, siteIdx, idx, dv) });
+  }
+  return { base, files };
+}
+
+renderAll();
+</script>
+</body>
+</html>
