@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Switch Doctor — Network Switch Troubleshooter</title>
+<meta name="description" content="Switch Doctor: understand network switch port faults and fix them step by step.">
+<link rel="icon" href="../switch-doctor.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0d1117; --panel:#151b24; --panel2:#1b2330; --line:#2a3443; --text:#e3e9f1; --muted:#8b98aa;
+  --green:#3fd07a; --amber:#f2b33d; --red:#ff5d5d; --blue:#5aa8ff; --dim:#3a4556;
+  --mono:'IBM Plex Mono',ui-monospace,monospace; --sans:'IBM Plex Sans',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5}
+button{font-family:inherit;font-size:14px;cursor:pointer}
+header{display:flex;align-items:center;gap:14px;padding:16px 24px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.logo{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,#1f6f4a,#2b4f8f);display:grid;place-items:center;font-family:var(--mono);font-weight:600}
+header h1{font-size:18px;margin:0}
+header p{margin:0;color:var(--muted);font-size:13px}
+nav{display:flex;gap:4px;margin-left:auto;background:var(--panel);padding:4px;border-radius:10px;border:1px solid var(--line)}
+nav button{background:none;border:0;color:var(--muted);padding:7px 14px;border-radius:7px}
+nav button.active{background:var(--panel2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+main{padding:20px 24px;max-width:1400px;margin:0 auto}
+.view{display:none}.view.active{display:block}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:20px}
+@media(max-width:1000px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px}
+.card h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:600}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:8px 13px;border-radius:8px}
+.btn:hover{border-color:#3d4a5e}
+.btn.primary{background:#1f6f4a;border-color:#2a8a5d}
+.btn.primary:hover{background:#25804f}
+.btn.ghost{background:none}
+.btn.small{padding:5px 10px;font-size:13px}
+
+/* faceplate */
+.chassis{background:linear-gradient(#2a313c,#20262f);border:1px solid #3a4352;border-radius:10px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);overflow-x:auto}
+.chassis-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-family:var(--mono);font-size:12px;color:#aab4c3}
+.sysleds{display:flex;gap:12px;align-items:center}
+.sysled{display:flex;align-items:center;gap:5px}
+.ports{display:grid;grid-auto-flow:column;grid-template-rows:auto auto;gap:6px 6px;width:max-content}
+.port{position:relative;width:44px;cursor:pointer;background:none;border:0;padding:0;color:inherit}
+.port .jack{height:36px;background:#0b0e13;border:2px solid #4a5465;border-radius:4px;position:relative;transition:transform .1s}
+.port .jack::after{content:"";position:absolute;left:12px;right:12px;bottom:-2px;height:9px;background:#0b0e13;border:2px solid #4a5465;border-top:0;border-radius:0 0 3px 3px;display:none}
+.port .jack::before{content:"";position:absolute;left:6px;right:6px;top:5px;height:4px;background:repeating-linear-gradient(90deg,#b8963a 0 2px,transparent 2px 5px);opacity:.55}
+.port.sfp .jack{height:30px;border-radius:2px}
+.port.sfp .jack::before{background:#2a3140;height:14px;top:6px;left:5px;right:5px;opacity:1;border-radius:1px}
+.port .leds{position:absolute;top:2px;right:3px;display:flex;gap:2px}
+.led{width:7px;height:7px;border-radius:50%;background:var(--dim)}
+.led.green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.led.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.led.red{background:var(--red);box-shadow:0 0 7px var(--red)}
+.led.blink{background:var(--amber);animation:blink .6s steps(2) infinite}
+.led.blue{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+@keyframes blink{50%{background:var(--dim);box-shadow:none}}
+.port .num{font-family:var(--mono);font-size:10px;color:#9aa6b6;text-align:center;margin-top:2px}
+.port:hover .jack{border-color:#8091ab}
+.port.sel .jack{border-color:var(--blue);box-shadow:0 0 0 3px rgba(90,168,255,.25)}
+.port.bad .jack{border-color:#8a3a3a}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+
+/* summary */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px}
+.stat b{display:block;font-size:24px;font-family:var(--mono)}
+.stat small{color:var(--muted);font-size:12px}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}}
+.issues{display:flex;flex-direction:column;gap:8px}
+.issue{display:flex;align-items:center;gap:12px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;color:inherit;width:100%}
+.issue:hover{border-color:#3d4a5e}
+.issue .pname{font-family:var(--mono);font-size:13px;min-width:80px}
+.issue .what{flex:1}
+.issue .what small{display:block;color:var(--muted);font-size:12px}
+.sev{font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.sev-0{background:rgba(63,208,122,.12);color:var(--green)}
+.sev-1{background:rgba(90,168,255,.12);color:var(--blue)}
+.sev-2{background:rgba(242,179,61,.14);color:var(--amber)}
+.sev-3{background:rgba(255,93,93,.14);color:var(--red)}
+.empty{color:var(--muted);text-align:center;padding:20px}
+
+/* detail */
+.detail h3{margin:0 0 4px;font-family:var(--mono);font-size:20px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:6px 10px;font-size:13px;margin:14px 0}
+.kv dt{color:var(--muted)}.kv dd{margin:0;font-family:var(--mono)}
+.section{margin-top:16px}
+.section h4{font-size:13px;margin:0 0 6px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.section ul{margin:0;padding-left:18px}
+.section li{margin:3px 0}
+.explain{background:var(--panel2);border-left:3px solid var(--amber);padding:10px 12px;border-radius:0 8px 8px 0;font-size:14px}
+.explain.ok{border-color:var(--green)}
+.explain.hi{border-color:var(--red)}
+select,input,textarea{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:14px}
+textarea{font-family:var(--mono);font-size:12px;width:100%;min-height:220px}
+.cmd{position:relative;background:#080b10;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-family:var(--mono);font-size:13px;color:#b9f5c9;white-space:pre-wrap;margin:8px 0}
+.cmd .copy{position:absolute;top:6px;right:6px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:3px 8px;border-radius:6px}
+.cmd .copy:hover{color:var(--text)}
+
+/* wizard */
+.overlay{position:fixed;inset:0;background:rgba(5,8,12,.72);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;z-index:20}
+.overlay.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(720px,100%);padding:22px 24px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.modal-head h2{margin:0;font-size:18px}
+.modal-head small{color:var(--muted)}
+.crumbs{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0;font-size:12px}
+.crumbs span{background:var(--panel2);border:1px solid var(--line);color:var(--muted);padding:3px 9px;border-radius:99px}
+.crumbs span.cur{color:var(--text);border-color:var(--blue)}
+.step-n{font-family:var(--mono);color:var(--blue);font-size:12px;letter-spacing:.06em}
+.q{font-size:19px;font-weight:600;margin:4px 0 8px}
+.qd{color:#c4cdd9}
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.opt{text-align:left;background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:12px 14px;border-radius:10px;display:flex;justify-content:space-between;align-items:center}
+.opt:hover{border-color:var(--blue);background:#1e2938}
+.opt::after{content:"→";color:var(--muted)}
+.fixbox{background:rgba(63,208,122,.07);border:1px solid rgba(63,208,122,.35);border-radius:12px;padding:16px;margin-top:8px}
+.fixbox.esc{background:rgba(242,179,61,.07);border-color:rgba(242,179,61,.35)}
+.fixbox h3{margin:0 0 6px;font-size:17px}
+.fixbox ol{padding-left:20px;margin:8px 0}
+.fixbox li{margin:5px 0}
+.verify{margin-top:10px;font-size:14px;color:#c4cdd9}
+.wiz-foot{display:flex;justify-content:space-between;gap:8px;margin-top:20px;flex-wrap:wrap}
+
+/* symptom & library */
+.sym-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.sym{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:left;color:inherit;cursor:pointer}
+.sym:hover{border-color:var(--blue)}
+.sym .ic{font-size:22px}
+.sym b{display:block;margin:6px 0 4px;font-size:15px}
+.sym small{color:var(--muted)}
+.lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+.lib .card h3{margin:0 0 6px;font-size:16px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.lib p{margin:6px 0;color:#c4cdd9;font-size:14px}
+.note{color:var(--muted);font-size:13px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1f6f4a;padding:9px 16px;border-radius:8px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+.toast.show{opacity:1}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">SD</div>
+  <div>
+    <h1>Switch Doctor</h1>
+    <p>See what's wrong with each port, why it matters, and fix it step by step.</p>
+  </div>
+  <a href="../" style="color:var(--muted);text-decoration:none;font-size:13px;border:1px solid var(--line);border-radius:7px;padding:4px 10px">← Jon. T</a>
+  <nav id="tabs">
+    <button data-v="switch" class="active">Switch view</button>
+    <button data-v="symptoms">Troubleshoot a symptom</button>
+    <button data-v="library">Fault library</button>
+    <button data-v="import">Import from CLI</button>
+  </nav>
+</header>
+
+<main>
+<!-- SWITCH VIEW -->
+<section class="view active" id="v-switch">
+  <div class="toolbar">
+    <button class="btn" id="b-demo">Load demo faults</button>
+    <button class="btn" id="b-rand">Randomize faults</button>
+    <button class="btn" id="b-clear">All healthy</button>
+    <button class="btn ghost" id="b-import">Import my switch…</button>
+  </div>
+  <div class="grid">
+    <div>
+      <div class="chassis">
+        <div class="chassis-top">
+          <span id="model">NS-2400 · 24× 1G + 4× SFP uplinks</span>
+          <span class="sysleds">
+            <span class="sysled"><i class="led green"></i>SYS</span>
+            <span class="sysled"><i class="led" id="led-stat"></i>STAT</span>
+            <span class="sysled"><i class="led" id="led-poe"></i>PoE</span>
+          </span>
+        </div>
+        <div class="ports" id="ports"></div>
+      </div>
+      <div class="legend">
+        <span><i class="led green"></i>Link up, healthy</span>
+        <span><i class="led amber"></i>Up with a problem</span>
+        <span><i class="led blink"></i>Flapping</span>
+        <span><i class="led red"></i>Err-disabled</span>
+        <span><i class="led"></i>No link / unused</span>
+        <span><i class="led blue"></i>PoE on</span>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="card">
+        <h2>Issues found, worst first</h2>
+        <div class="issues" id="issues"></div>
+      </div>
+    </div>
+    <aside class="card detail" id="detail"></aside>
+  </div>
+</section>
+
+<!-- SYMPTOMS -->
+<section class="view" id="v-symptoms">
+  <div class="card" style="margin-bottom:16px">
+    <h2>Start from what you're seeing</h2>
+    <p class="note" style="margin:0">Don't know which port is the problem yet? Pick the symptom and Switch Doctor will walk you to the cause.</p>
+  </div>
+  <div class="sym-grid" id="symgrid"></div>
+</section>
+
+<!-- LIBRARY -->
+<section class="view" id="v-library">
+  <div class="card" style="margin-bottom:16px">
+    <h2>Fault library</h2>
+    <p class="note" style="margin:0">Every fault Switch Doctor knows about: what it means, why it happens, and the commands to check it. Commands are Cisco IOS style; most other vendors (Aruba, Juniper, Netgear) have close equivalents.</p>
+  </div>
+  <div class="lib" id="lib"></div>
+</section>
+
+<!-- IMPORT -->
+<section class="view" id="v-import">
+  <div class="grid">
+    <div class="card">
+      <h2>Import from your real switch</h2>
+      <p class="note">Run <code>show interfaces status</code> on a Cisco-style switch and paste the output below. Switch Doctor maps each port's status, duplex, and speed to a likely fault.</p>
+      <textarea id="cli" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="b-parse">Analyze my ports</button>
+        <button class="btn" id="b-sample">Paste a sample</button>
+        <span class="note" id="parse-msg"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>How it reads your output</h2>
+      <div class="section"><ul>
+        <li><b>connected</b>: healthy, unless duplex is half (<i>duplex mismatch</i>) or a gigabit port linked at 10/100 (<i>low speed</i>)</li>
+        <li><b>notconnect</b>: unused if the port has no description, <i>no link</i> if it has one (something's supposed to be there)</li>
+        <li><b>err-disabled</b>: <i>err-disabled</i></li>
+        <li><b>disabled</b>: <i>administratively down</i></li>
+        <li><b>inactive</b>: <i>VLAN problem</i> (the VLAN doesn't exist)</li>
+      </ul></div>
+      <p class="note">After importing, click any port and use <b>Set fault manually</b> to add things the status table can't show, like CRC errors, PoE trouble, or STP blocking.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<div class="overlay" id="wiz"><div class="modal" id="wizbody"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- FAULT DEFINITIONS ---------------- */
+const SEV=['OK','Low','Medium','High'];
+const FAULTS={
+ ok:{name:'Healthy',sev:0,led:'green',summary:'Link is up and passing traffic normally.',
+   what:'The port has link, negotiated full duplex at its expected speed, and shows no error counters climbing.',causes:[],impact:'None.',cmds:['show interfaces {p}'],start:null},
+ unused:{name:'Unused',sev:0,led:'',summary:'Nothing plugged in. That\'s expected.',
+   what:'No cable or device is connected. On most switches the majority of ports look like this, and that\'s fine.',causes:[],impact:'None.',cmds:['show interfaces status'],start:null},
+ notconnect:{name:'No link',sev:2,led:'',summary:'A device should be here but the port has no link.',
+   what:'The switch sees no electrical or optical signal on the port. Layer 1 is down, so nothing above it can work.',
+   causes:['Device powered off or asleep','Bad, loose, or wrong cable','Port shut down in config','Speed/duplex hard-coded on one side only','Faulty NIC or switch port'],
+   impact:'The connected device is completely offline.',cmds:['show interfaces {p} status','show run interface {p}'],start:'nc1'},
+ errdisable:{name:'Err-disabled',sev:3,led:'red',summary:'The switch shut this port down on purpose to protect the network.',
+   what:'A protection feature (BPDU Guard, Port Security, link-flap detection, UDLD, storm control) saw something dangerous and disabled the port. It stays down until someone fixes the cause and resets it.',
+   causes:['BPDU Guard: someone plugged a switch into a user port','Port Security: an unknown or extra MAC address showed up','Link flap: the link bounced too many times','UDLD: one-way fiber link detected'],
+   impact:'Port is down. Resetting it without fixing the cause will just trip it again.',cmds:['show interfaces status err-disabled','show errdisable recovery','show logging | include ERR'],start:'ed1'},
+ admindown:{name:'Administratively down',sev:1,led:'',summary:'Someone turned this port off in the config.',
+   what:'The port has a <code>shutdown</code> command applied. Often this is deliberate, for security or unused ports.',
+   causes:['Intentionally disabled (security policy)','Left shut after maintenance','Config copied from a template'],
+   impact:'Nothing plugged in will work until it is enabled.',cmds:['show run interface {p}','show interfaces {p} status'],start:'ad1'},
+ duplex:{name:'Duplex mismatch',sev:2,led:'amber',summary:'One side talks full duplex, the other half. Traffic works, but badly.',
+   what:'One end sends and receives at the same time (full) while the other takes turns (half). The half-duplex side sees "collisions" that aren\'t real and drops frames. The classic cause is hard-coding one side and leaving the other on auto.',
+   causes:['Speed/duplex hard-coded on only one end','Old NIC or driver with broken auto-negotiation','Damaged cable confusing negotiation'],
+   impact:'Very slow transfers, late collisions, CRC errors, and apps that time out under load even though ping looks fine.',cmds:['show interfaces {p} | include duplex','show interfaces {p} counters errors'],start:'dx1'},
+ crc:{name:'CRC / input errors',sev:2,led:'amber',summary:'Frames are arriving corrupted.',
+   what:'The CRC (checksum) on incoming frames doesn\'t match, so the switch throws them away. This almost always points at the physical layer.',
+   causes:['Bad or damaged cable, or a bad patch panel jack','Duplex mismatch','Dirty or failing fiber/SFP optic','Electrical interference (cable run next to power)','Faulty NIC'],
+   impact:'Retransmissions, slow performance, choppy voice and video.',cmds:['show interfaces {p} counters errors','show interfaces {p} | include CRC|input errors','show interfaces {p} transceiver'],start:'crc1'},
+ vlan:{name:'VLAN problem',sev:2,led:'amber',summary:'Link is up but the device is on the wrong network segment.',
+   what:'The port is in the wrong VLAN, or its VLAN isn\'t carried upstream. The device either gets the wrong IP or no IP and can\'t reach what it needs.',
+   causes:['Port assigned to the wrong access VLAN','VLAN not allowed on the trunk to the core','VLAN doesn\'t exist on this switch (port shows "inactive")','No DHCP helper on the VLAN interface'],
+   impact:'The device has link but no network, an APIPA 169.254.x.x address, or can\'t reach certain resources.',cmds:['show vlan brief','show run interface {p}','show interfaces trunk'],start:'vl1'},
+ stp:{name:'Spanning-tree blocking',sev:1,led:'amber',summary:'Spanning Tree is blocking this port to prevent a loop.',
+   what:'STP found a redundant path and put this port in blocking state so frames can\'t loop forever. On a backup uplink that\'s normal. On a user port it means something is creating a loop.',
+   causes:['Redundant uplink (normal)','Someone cabled two wall jacks together','Unmanaged switch or hub creating a loop','Wrong root bridge election'],
+   impact:'If it\'s expected, none. If not, the device on this port can\'t talk. And without STP a loop would cause a broadcast storm that takes down the whole network.',cmds:['show spanning-tree interface {p}','show spanning-tree root','show spanning-tree blockedports'],start:'st1'},
+ poe:{name:'PoE fault',sev:2,led:'amber',summary:'The powered device (phone, AP, camera) isn\'t getting the power it needs.',
+   what:'Power over Ethernet either failed to detect the device, was denied because the power budget is used up, or the device needs more watts than the port gives.',
+   causes:['Switch PoE budget exhausted','Device needs PoE+ or PoE++ but port gives standard PoE','Bad cable (one pair broken)','Port in a PoE error state'],
+   impact:'The phone, access point, or camera won\'t power on or keeps rebooting.',cmds:['show power inline','show power inline {p} detail'],start:'pe1'},
+ flap:{name:'Link flapping',sev:3,led:'blink',summary:'The link keeps going up and down.',
+   what:'The port is bouncing between up and down. Each bounce can trigger spanning-tree recalculation and MAC table flushes that ripple across the network.',
+   causes:['Loose or damaged cable or connector','Device NIC power-saving (EEE / sleep)','Speed/duplex mismatch','Failing SFP or switch port'],
+   impact:'Intermittent outages for this device, and STP churn that can make the whole network hiccup. May become err-disabled.',cmds:['show logging | include {p}','show interfaces {p} | include resets|changed'],start:'fl1'},
+ speed:{name:'Low negotiated speed',sev:1,led:'amber',summary:'A gigabit port linked at only 10 or 100 Mbps.',
+   what:'Auto-negotiation settled on a lower speed than the port supports. Gigabit needs all 4 wire pairs; 100 Mbps only uses 2, so a damaged pair silently drops you to 100.',
+   causes:['Device only supports 100 Mbps (expected)','Cat5 cable or a broken wire pair','Speed hard-coded to 100','Bad patch panel termination'],
+   impact:'Up to 10× slower transfers.',cmds:['show interfaces {p} status','show interfaces {p} | include Mb/s'],start:'sp1'}
+};
+const FAULT_KEYS=Object.keys(FAULTS);
+
+/* ---------------- DECISION TREES ---------------- */
+const N={};
+function Q(id,text,detail,cmd,opts){N[id]={id,text,detail,cmd,opts}}
+function F(id,title,text,steps,cmd,verify){N[id]={id,fix:true,title,text,steps,cmd,verify}}
+function E(id,title,text,steps){N[id]={id,fix:true,esc:true,title,text,steps}}
+
+// No link
+Q('nc1','Is the device on the other end powered on?','Check for power lights on the PC, phone, printer, or AP. Laptops in sleep mode often drop link.',null,[['Yes, it\'s on','nc2'],['No / not sure','ncF_power']]);
+F('ncF_power','Power on the device','No power means no link signal.',['Power on or wake the device.','If it runs on PoE, open the PoE troubleshooter instead.','Wait 10 to 30 seconds for the link to negotiate.'],'show interfaces {p} status','The port should change to <b>connected</b> and its LED should turn green.');
+Q('nc2','Is the port shut down in the config?','Look for a <code>shutdown</code> line under the interface.','show run interface {p}',[['Yes, I see "shutdown"','ncF_noshut'],['No','nc3']]);
+F('ncF_noshut','Enable the port','The port is administratively disabled.',['Confirm nobody shut it on purpose (check the description and change records).','Enter config mode and run <code>no shutdown</code> on the interface.','Save the config.'],'configure terminal\ninterface {p}\n no shutdown\nend\ncopy running-config startup-config','<code>show interfaces {p} status</code> should show <b>connected</b>.');
+Q('nc3','Swap in a known-good patch cable. Does the link come up?','Cables fail far more often than ports. Use one you\'ve just tested on a working device.',null,[['Yes, link is up','ncF_cable'],['No, still down','nc4']]);
+F('ncF_cable','Bad cable: replace it','The old cable was faulty.',['Throw the bad cable away (don\'t put it back in the bin).','If the run goes through a wall jack or patch panel, test it with a cable tester. The permanent run might be the problem.'],null,'Link LED green, and <code>show interfaces {p} counters errors</code> stays at zero.');
+Q('nc4','Is speed or duplex hard-coded on either end?','If one side is hard-coded to something the other doesn\'t support, they may never agree on a link.','show run interface {p} | include speed|duplex',[['Yes','ncF_auto'],['No, both on auto','nc5']]);
+F('ncF_auto','Set both sides to auto-negotiate','Mismatched hard-coded settings prevent link.',['Remove speed/duplex settings on the switch port.','Set the device NIC to "Auto Negotiation".','If you must hard-code, set <b>both</b> ends to identical values.'],'configure terminal\ninterface {p}\n speed auto\n duplex auto\nend','The port shows <b>a-full a-1000</b> (or a-100) in <code>show interfaces status</code>.');
+Q('nc5','Plug the device into a different, known-working switch port. Does it link up?','This tells you whether the problem is the switch port or the device.',null,[['Yes, works on another port','ncF_port'],['No, still no link','ncE_nic']]);
+F('ncF_port','The switch port has failed','The original port is likely bad hardware.',['Move the device permanently to the working port and update the port description.','Copy the old port\'s config (VLAN, PoE, security) to the new port.','Label the bad port "BAD - do not use" and run <code>shutdown</code> on it.','If several ports fail, open a hardware ticket for the switch.'],'configure terminal\ninterface {p}\n description BAD-PORT-DO-NOT-USE\n shutdown\nend',null);
+E('ncE_nic','The problem is the device','Good cable, good port, still no link: the device\'s network card is the likely culprit.',['Check the NIC is enabled in the OS (Device Manager / Network settings).','Update or reinstall the NIC driver.','Try a USB-to-Ethernet adapter to confirm.','Hand off to desktop support if hardware replacement is needed.']);
+
+// Err-disabled
+Q('ed1','Why was the port err-disabled?','The reason column tells you which protection feature fired. Also check the log.','show interfaces status err-disabled\nshow logging | include ERR',[['bpduguard','ed_bpdu'],['psecure-violation (port security)','ed_psec'],['link-flap','fl1'],['udld','ed_udld'],['something else / not sure','edE']]);
+Q('ed_bpdu','Is there a switch, hub, or bridged device plugged into this port?','BPDU Guard fires when a port meant for an end device receives spanning-tree packets, which only switches send. Look for a small desk switch, a home router, or a VM host bridging traffic.',null,[['Yes, found one','edF_bpdu_remove'],['No, it should be a switch link','edF_bpdu_trunk']]);
+F('edF_bpdu_remove','Remove the rogue switch, then reset the port','Unauthorized switches can create loops that take down the network.',['Unplug the switch/hub from the wall jack.','If the user needs more ports, request a proper drop or a managed switch from IT.','Reset the port (shutdown, then no shutdown).'],'configure terminal\ninterface {p}\n shutdown\n no shutdown\nend','Port shows <b>connected</b> and stays up. Watch the log for a few minutes for repeat BPDU Guard events.');
+F('edF_bpdu_trunk','This port connects a switch: change its role','BPDU Guard shouldn\'t be enabled on switch-to-switch links.',['Confirm with your network design that this is meant to be an uplink.','Remove PortFast and BPDU Guard from the interface.','Configure it as a trunk if it carries several VLANs.','Reset the port.'],'configure terminal\ninterface {p}\n no spanning-tree portfast\n no spanning-tree bpduguard enable\n switchport mode trunk\n shutdown\n no shutdown\nend','<code>show spanning-tree interface {p}</code> shows the port forwarding with a proper STP role.');
+Q('ed_psec','Was the device on this port recently replaced or moved on purpose?','Port Security locks a port to specific MAC addresses. A new PC, docking station, or IP phone with a PC behind it can exceed the limit.','show port-security interface {p}\nshow port-security address',[['Yes, legitimate change','edF_psec_clear'],['No, unknown device','edE_psec_rogue']]);
+F('edF_psec_clear','Clear the old MAC and reset the port','The port remembered the old device\'s MAC.',['Clear the learned/sticky MAC addresses for this port.','If a phone with a PC behind it is connected, raise the maximum to 2 or 3.','Reset the port and save.'],'clear port-security sticky interface {p}\nconfigure terminal\ninterface {p}\n switchport port-security maximum 2\n shutdown\n no shutdown\nend\ncopy running-config startup-config','<code>show port-security interface {p}</code> shows <b>Secure-up</b> with violation count 0.');
+E('edE_psec_rogue','Possible unauthorized device: investigate before resetting','Leave the port down and treat this as a security event.',['Note the violating MAC from <code>show port-security interface {p}</code>.','Look up the vendor of the MAC (first 6 hex digits) to identify the device type.','Physically inspect what\'s plugged into the jack.','Report to your security team before re-enabling.']);
+F('ed_udld','UDLD: one-way fiber link','One strand of the fiber pair isn\'t delivering light, so traffic only flows one way, which is dangerous for STP.',['Check both fiber strands: clean the connectors with a fiber cleaning pen.','Check light levels with <code>show interfaces {p} transceiver</code>.','Replace the patch cord, then the SFP if levels are still bad.','Reset the port.'],'show interfaces {p} transceiver\nconfigure terminal\ninterface {p}\n shutdown\n no shutdown\nend','UDLD shows <b>bidirectional</b> in <code>show udld {p}</code>.');
+E('edE','Find the specific cause first','Other err-disable reasons include storm-control, dhcp-snooping rate limit, and loopback.',['Read the full log line for this port: it names the feature.','Look the reason up in your vendor\'s err-disable documentation.','Fix the cause, then reset the port with shutdown / no shutdown.','Optionally enable automatic recovery: <code>errdisable recovery cause all</code> and <code>errdisable recovery interval 300</code>.']);
+
+// Admin down
+Q('ad1','Was this port shut down on purpose?','Check the port description and any change tickets. Unused ports are often deliberately disabled for security.','show run interface {p}',[['Yes, intentional','adF_leave'],['No / it should be live','ncF_noshut']]);
+F('adF_leave','Leave it disabled','This is good security practice for unused ports.',['Add a clear description, e.g. "UNUSED - shutdown".','Consider putting unused ports in an unused "parking" VLAN as well.'],'configure terminal\ninterface {p}\n description UNUSED\n switchport access vlan 999\nend',null);
+
+// Duplex
+Q('dx1','Is speed or duplex hard-coded on one side but not the other?','The #1 cause of duplex mismatch: one side is set to "100/Full" and the other is on auto. The auto side can\'t detect duplex, so it falls back to half.','show run interface {p} | include speed|duplex\nshow interfaces {p} | include duplex',[['Yes, one side is hard-coded','dxF_auto'],['No, both on auto','dx2']]);
+F('dxF_auto','Make both sides match','Both ends must agree.',['Best: set <b>both</b> switch port and NIC to auto-negotiate.','If the device requires fixed settings, hard-code <b>both</b> ends identically (e.g., 100/full on both).','Clear counters so you can see if errors return.'],'configure terminal\ninterface {p}\n speed auto\n duplex auto\nend\nclear counters {p}','<code>show interfaces {p}</code> shows <b>Full-duplex</b>, and late collisions/CRC stay at 0 after a few minutes of traffic.');
+Q('dx2','Swap the cable. Does the port now negotiate full duplex?','A damaged pair can confuse auto-negotiation.',null,[['Yes','ncF_cable'],['No, still half','dxF_hard']]);
+F('dxF_hard','Hard-code both ends','The device\'s auto-negotiation is unreliable (common with older printers and industrial gear).',['Find the highest speed the device supports.','Hard-code the switch port <b>and</b> the device to the same speed and full duplex.','Update the device driver/firmware if possible.'],'configure terminal\ninterface {p}\n speed 100\n duplex full\nend','<code>show interfaces {p}</code> shows <b>Full-duplex, 100Mb/s</b> and no new collisions.');
+
+// CRC
+Q('crc1','Are the errors still going up?','Run the command, wait about a minute while traffic flows, and run it again. Old errors from a past problem don\'t matter.','show interfaces {p} counters errors',[['Yes, still increasing','crc2'],['No, the number is static','crcF_clear']]);
+F('crcF_clear','Old errors: clear the counters','The errors are historical; the problem has already gone away.',['Clear the counters so you have a clean baseline.','Check again tomorrow.'],'clear counters {p}','Counters stay at 0.');
+Q('crc2','Is the port running half duplex?','A duplex mismatch causes CRC errors on the full-duplex side and late collisions on the half side.','show interfaces {p} | include duplex',[['Yes, half duplex','dx1'],['No, full duplex','crc3']]);
+Q('crc3','Is this a copper (RJ45) or fiber (SFP) link?',null,null,[['Copper','crc4'],['Fiber / SFP','crc5']]);
+Q('crc4','Replace the patch cable and clear counters. Do errors keep climbing?','Also check that the cable isn\'t run alongside power lines or fluorescent lights.','clear counters {p}\nshow interfaces {p} counters errors',[['No, errors stopped','ncF_cable'],['Yes, still climbing','crc6']]);
+Q('crc5','Are the optic light levels (Rx/Tx power) within the normal range?','Look for warnings or alarms in the transceiver output. Rx power typically should be above about −14 dBm for short-range optics.','show interfaces {p} transceiver detail',[['No, low or alarming','crcF_fiber'],['Yes, levels look normal','crc6']]);
+F('crcF_fiber','Clean or replace the optics','Dirty connectors and failing SFPs are the top cause of fiber errors.',['Clean both ends of the fiber with a click-cleaner pen.','Replace the fiber patch cord.','Swap the SFP for a known-good one of the same type.','Check light levels again.'],'show interfaces {p} transceiver detail\nclear counters {p}','Rx power is in range and CRC stays at 0.');
+Q('crc6','Move the device to another switch port. Do errors follow the device?',null,null,[['Yes, errors on the new port too','ncE_nic'],['No, new port is clean','crcF_port']]);
+F('crcF_port','Wall jack, patch panel, or switch port is faulty','The fault stays with the location, not the device.',['Test the permanent cable run (wall jack to patch panel) with a cable certifier.','Re-terminate the jack or patch panel if it fails.','If the run tests good, the switch port is faulty: mark it bad and move the device.'],null,null);
+
+// VLAN
+Q('vl1','Is the port in the VLAN it should be in?','Compare the port\'s access VLAN with what the device needs (e.g., Data = 10, Voice = 20, Printers = 30).','show run interface {p}\nshow vlan brief',[['No, wrong VLAN','vlF_assign'],['Yes, it\'s correct','vl2'],['Port shows "inactive"','vlF_create']]);
+F('vlF_assign','Put the port in the right VLAN',null,['Set the correct access VLAN.','If there\'s an IP phone, also set the voice VLAN.','Have the user renew their IP address (unplug/replug or <code>ipconfig /renew</code>).'],'configure terminal\ninterface {p}\n switchport mode access\n switchport access vlan 10\n switchport voice vlan 20\nend','The device gets an IP in the correct subnet.');
+F('vlF_create','Create the missing VLAN','The port references a VLAN that doesn\'t exist on this switch, so it goes inactive.',['Create the VLAN with the correct number and name.','Make sure it is also allowed on the uplink trunk.'],'configure terminal\nvlan 30\n name PRINTERS\nend\nshow vlan brief','The port changes from <b>inactive</b> to <b>connected</b>.');
+Q('vl2','Is the VLAN allowed on the uplink trunk to the core?','If the trunk doesn\'t carry the VLAN, traffic can\'t leave this switch.','show interfaces trunk',[['No, it\'s missing from the allowed list','vlF_trunk'],['Yes, it\'s allowed','vl3']]);
+F('vlF_trunk','Add the VLAN to the trunk','Use <b>add</b>. Without it you\'ll replace the whole allowed list and cut off every other VLAN!',['Identify the uplink port (often Gi1/1/1).','Add the VLAN to the allowed list with the <code>add</code> keyword.','Do the same on the other end of the trunk.'],'configure terminal\ninterface Gi1/1/1\n switchport trunk allowed vlan add 10\nend','<code>show interfaces trunk</code> lists the VLAN under "Vlans allowed and active".');
+Q('vl3','Does the device get a valid IP address (not 169.254.x.x)?','169.254.x.x means DHCP failed.',null,[['No, 169.254 or no IP','vlF_dhcp'],['Yes, valid IP','vl4']]);
+F('vlF_dhcp','Fix DHCP for this VLAN','The VLAN\'s gateway isn\'t forwarding DHCP requests to the server.',['On the router or layer-3 switch that owns this VLAN, check its interface for an <code>ip helper-address</code>.','Make sure the DHCP server has a scope for this subnet with free addresses.','Renew the IP on the device.'],'interface vlan 10\n ip helper-address 10.0.0.5','The device receives an address in the right subnet.');
+Q('vl4','Can the device ping its default gateway?',null,null,[['No','vlE_gw'],['Yes, but it still can\'t reach some things','vlE_route']]);
+E('vlE_gw','Gateway problem','The VLAN\'s gateway interface may be down or misconfigured.',['On the layer-3 device, run <code>show ip interface brief</code> and confirm the VLAN interface is up/up.','Make sure the device\'s gateway matches the VLAN interface IP.','Check for ACLs applied to the VLAN interface.']);
+E('vlE_route','The switch is fine: look upstream','Layer 2 is working. The issue is routing, a firewall, or ACLs beyond this switch.',['Run <code>tracert</code> / <code>traceroute</code> from the device to see where it stops.','Check firewall rules between this subnet and the destination.','Escalate to the network/security team with the traceroute output.']);
+
+// STP
+Q('st1','Is this port a redundant/backup link to another switch?','Blocking on a backup uplink is normal and healthy. STP is doing its job.','show spanning-tree interface {p}',[['Yes, it\'s a backup uplink','stF_ok'],['No, it\'s a user/device port','st2']]);
+F('stF_ok','This is expected: no action needed','STP blocks one of two redundant paths. If the primary link fails, this port will start forwarding automatically.',['Document that this port is the standby path.','Optionally check that the right link is blocking (the slower one, or the one further from the root).'],'show spanning-tree root',null);
+Q('st2','Is there evidence of a loop? (MAC flapping in logs, high broadcast traffic, two jacks cabled together)','A user port should never receive STP packets from another switch.','show logging | include MACFLAP\nshow interfaces {p} | include broadcast',[['Yes','stF_loop'],['No','st3']]);
+F('stF_loop','Break the loop and protect the port','Something is creating a second path between switches.',['Trace the cable from this port: look for a jack patched to another jack, or a small unmanaged switch.','Remove the extra connection.','Enable PortFast and BPDU Guard so it gets err-disabled automatically next time.'],'configure terminal\ninterface {p}\n spanning-tree portfast\n spanning-tree bpduguard enable\nend','<code>show spanning-tree interface {p}</code> shows <b>FWD</b> (forwarding) and the logs stay quiet.');
+Q('st3','Is the root bridge the switch you expect (usually the core)?','If an access switch became root, traffic paths and blocked ports will be wrong.','show spanning-tree root',[['No, wrong root','stF_root'],['Yes','stE']]);
+F('stF_root','Force the correct root bridge','Set a low priority on the core switch so it always wins.',['On the <b>core</b> switch, set the root priority for each VLAN.','Optionally set a secondary root on the backup core.','Wait about 30 seconds for STP to reconverge.'],'! on the CORE switch\nconfigure terminal\nspanning-tree vlan 1-4094 root primary\nend','<code>show spanning-tree root</code> shows the core as root and this port moves to forwarding.');
+E('stE','Escalate with STP details','The topology needs a closer look.',['Collect <code>show spanning-tree detail</code> from this switch and its neighbors.','Draw the physical connections between switches.','Escalate to the network team.']);
+
+// PoE
+Q('pe1','What does "show power inline" report for this port?',null,'show power inline {p}',[['Oper: off or faulty','pe2'],['Oper: power-deny','peF_budget'],['Oper: on, but the device still isn\'t working','pe3']]);
+F('peF_budget','PoE budget exhausted','The switch has handed out all its power.',['Check the totals: "Available" vs "Used" in <code>show power inline</code>.','Turn off PoE on ports that don\'t need it (e.g., PCs).','Set priority so critical devices (APs, cameras) get power first.','Long-term: add a second power supply or a PoE injector.'],'show power inline\nconfigure terminal\ninterface Gi1/0/5\n power inline never\ninterface {p}\n power inline port priority high\nend','Port shows <b>on</b> and the device powers up.');
+Q('pe2','Does the device need PoE+ (802.3at, 30 W) or more?','Check the device\'s spec sheet. Newer Wi-Fi 6/7 APs and PTZ cameras often need PoE+ or PoE++.',null,[['Yes, needs PoE+/PoE++','peF_class'],['No / standard PoE is enough','pe4']]);
+F('peF_class','The port can\'t supply enough power','The device needs a higher PoE class than this switch/port provides.',['Move it to a PoE+ capable port if the switch has them.','Or use a PoE+ injector between the switch and device.','Some APs can run in reduced-power mode: check the AP\'s settings.'],'show power inline {p} detail',null);
+Q('pe4','Reset PoE on the port and reseat the cable. Does the device power up?','Toggling PoE clears a stuck detection state.','configure terminal\ninterface {p}\n power inline never\n power inline auto\nend',[['Yes','peF_ok'],['No','pe5']]);
+F('peF_ok','Fixed: PoE detection was stuck','Resetting cleared the fault.',['If it happens again, update the switch firmware: PoE detection bugs are common.'],null,'<code>show power inline {p}</code> shows <b>on</b> with a sensible wattage.');
+Q('pe5','Try a known-good cable. Does it power up now?','PoE needs all wire pairs intact; a cable that passes data can still fail PoE.',null,[['Yes','ncF_cable'],['No','peE']]);
+E('peE','Likely a faulty device or port','Test the device with a PoE injector. If it powers up, the switch port is faulty. If not, the device is.',['Test with a PoE injector or on another switch.','Replace whichever failed.']);
+Q('pe3','Does the device show power lights but no network connection?','Then power is fine and this is a data or VLAN problem.',null,[['Yes, powered but no network','vl1'],['It keeps rebooting','peF_class']]);
+
+// Flapping
+Q('fl1','How often is the link bouncing?','Count "changed state to down/up" messages for this port.','show logging | include {p}',[['Every few seconds / constantly','fl2'],['A few times a day','fl3']]);
+Q('fl2','Is the cable or connector visibly damaged, loose, or missing its locking clip?',null,null,[['Yes','ncF_cable'],['No, looks fine','fl4']]);
+Q('fl3','Is the device a laptop or PC that sleeps or uses power saving?','Energy Efficient Ethernet (EEE) and NIC power management drop the link on idle.',null,[['Yes','flF_eee'],['No','fl4']]);
+F('flF_eee','Disable NIC power saving','The device keeps dropping the link to save power.',['Device side: Device Manager → NIC → Power Management, uncheck "Allow the computer to turn off this device".','Device side: Advanced tab, disable "Energy Efficient Ethernet" / "Green Ethernet".','Switch side (optional): disable EEE on the port.'],'configure terminal\ninterface {p}\n no power efficient-ethernet\nend','No new up/down log entries for this port over the next day.');
+Q('fl4','Are speed/duplex hard-coded on either side?',null,'show run interface {p} | include speed|duplex',[['Yes','dxF_auto'],['No','fl5']]);
+Q('fl5','Swap the cable (and the SFP, if fiber). Does the flapping stop?',null,'clear counters {p}',[['Yes','ncF_cable'],['No','crc6']]);
+
+// Speed
+Q('sp1','Does the device actually support gigabit?','Check the NIC spec. Old printers, VoIP phones\' PC ports, and IoT gear are often 100 Mbps only.',null,[['No, 100 Mbps max','spF_ok'],['Yes, it supports 1G','sp2']]);
+F('spF_ok','Expected: no action needed','The device simply can\'t go faster.',['Add a note to the port description so nobody chases it again.'],'configure terminal\ninterface {p}\n description PRINTER-100M-ONLY\nend',null);
+Q('sp2','Is speed hard-coded to 100 on either side?',null,'show run interface {p} | include speed',[['Yes','dxF_auto'],['No','sp3']]);
+Q('sp3','Replace the cable with a Cat5e/Cat6 patch cord. Does it link at 1000?','Gigabit needs all 4 pairs. One broken pair silently drops you to 100.',null,[['Yes','ncF_cable'],['No','crcF_port']]);
+
+// Symptom entry trees
+const SYMPTOMS=[
+ {ic:'🔌',t:'A device has no network at all',d:'No link light, "network cable unplugged", or no IP.',start:'sy_none'},
+ {ic:'🐢',t:'Network is slow for one device',d:'Downloads crawl, apps time out, video stutters.',start:'sy_slow1'},
+ {ic:'〰️',t:'Connection keeps dropping',d:'Works, then doesn\'t, then works again.',start:'fl1'},
+ {ic:'🌐',t:'Has a link but can\'t reach things',d:'169.254 address, can\'t get to servers or the internet.',start:'vl1'},
+ {ic:'☎️',t:'Phone, AP, or camera won\'t power on',d:'PoE device is dark or keeps rebooting.',start:'pe1'},
+ {ic:'⛔',t:'Port light is orange/off after plugging something in',d:'Port was shut down by the switch.',start:'ed1'},
+ {ic:'🌪️',t:'Whole network is slow or down',d:'Many users affected at once.',start:'sy_all'},
+];
+Q('sy_none','Is the port\'s link light on?','Look at the LED on the switch port (and the device\'s NIC).','show interfaces {p} status',[['Off, no light','nc1'],['Orange / amber','ed1'],['Green, but still no network','vl1']]);
+Q('sy_slow1','What speed and duplex did the port negotiate?','Look at the Duplex and Speed columns.','show interfaces {p} status',[['Half duplex (a-half or half)','dx1'],['Full, but only 10 or 100','sp1'],['a-full a-1000, looks normal','crc1']]);
+Q('sy_all','Are the switch CPU or port LEDs going crazy (all blinking fast together)?','Rapid synchronized blinking on many ports is the classic sign of a broadcast storm caused by a loop.','show processes cpu sorted | exclude 0.00\nshow interfaces | include broadcast',[['Yes, everything is blinking','syF_storm'],['No','sy_all2']]);
+F('syF_storm','Broadcast storm: break the loop now','A layer-2 loop is flooding every port. This is an emergency.',['Look for the newest cable someone connected, and unplug it.','If you can\'t find it: unplug uplinks one at a time until the storm stops, then trace from there.','Check logs for MAC flapping to find the looping ports.','Afterwards: enable BPDU Guard on all access ports and storm-control on uplinks.'],'show logging | include MACFLAP\nconfigure terminal\ninterface range Gi1/0/1 - 24\n spanning-tree portfast\n spanning-tree bpduguard enable\n storm-control broadcast level 5\nend','CPU drops back to normal and port LEDs return to normal activity.');
+Q('sy_all2','Is the uplink port to the core healthy and not saturated?','Look at the input/output rate vs the link speed. Above ~80% sustained means congestion.','show interfaces Gi1/1/1 | include rate|error|duplex',[['Errors or half duplex','crc1'],['Saturated, near 100%','syF_cong'],['Looks fine','syE']]);
+F('syF_cong','Uplink congestion','Too much traffic for one uplink.',['Find the top talkers (NetFlow or your monitoring tool).','Add a second uplink and bundle them with EtherChannel/LACP.','Consider a 10G uplink if the switch supports it.','Apply QoS so voice and video get priority.'],'show etherchannel summary',null);
+E('syE','Problem is likely upstream','This switch looks healthy. Check the core switch, router, firewall, and ISP link next.',['Ping the default gateway, then an internet IP (8.8.8.8), then a hostname, to see which layer fails.','Check the firewall / ISP status.','Escalate with what you found.']);
+
+/* ---------------- STATE ---------------- */
+let ports=[], sel=null, ctxPort=null;
+function makePort(i,name,opts={}){return Object.assign({name,idx:i,fault:'unused',vlan:'1',desc:'',sfp:false,poe:false,speed:'',duplex:''},opts)}
+function defaultSwitch(){
+  const p=[];
+  for(let i=1;i<=24;i++)p.push(makePort(i,'Gi1/0/'+i,{vlan:'10'}));
+  for(let i=1;i<=4;i++)p.push(makePort(24+i,'Gi1/1/'+i,{sfp:true,vlan:'trunk'}));
+  return p;
+}
+const DEMO={1:['ok','PC-Reception'],2:['ok','PC-Sales-01'],3:['duplex','Printer-2F'],4:['ok','PC-Sales-02'],5:['poe','AP-Lobby',1],6:['ok','Phone-1041',1],
+  7:['errdisable','Conf-Room-B'],8:['ok','PC-HR-01'],9:['crc','PC-Eng-07'],10:['notconnect','Kiosk-01'],11:['flap','Laptop-Dock-3'],12:['ok','Phone-1042',1],
+  13:['vlan','Cam-Parking',1],14:['ok','PC-Eng-02'],15:['speed','PC-Eng-03'],16:['admindown',''],18:['ok','AP-Floor2',1],20:['ok','NAS-01'],
+  25:['ok','UPLINK-CORE-A'],26:['stp','UPLINK-CORE-B']};
+function loadDemo(){
+  ports=defaultSwitch();
+  for(const [k,v] of Object.entries(DEMO)){const p=ports[k-1];p.fault=v[0];p.desc=v[1];p.poe=!!v[2];}
+  ports[24].vlan=ports[25].vlan='trunk';
+  ports[12].vlan='1';
+  document.getElementById('model').textContent='NS-2400 · 24× 1G + 4× SFP uplinks (demo)';
+  sel=ports[6];save();render();
+}
+function save(){try{localStorage.setItem('sd-ports',JSON.stringify(ports))}catch(e){}}
+function restore(){try{const s=JSON.parse(localStorage.getItem('sd-ports'));if(Array.isArray(s)&&s.length){ports=s;return true}}catch(e){}return false}
+
+/* ---------------- RENDER ---------------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function cmdBlock(c,pn){if(!c)return'';const t=c.replaceAll('{p}',pn||'Gi1/0/X');return `<div class="cmd"><button class="copy">Copy</button>${esc(t)}</div>`}
+function ledFor(p){const f=FAULTS[p.fault];return f.led}
+function render(){
+  const wrap=$('#ports');wrap.innerHTML='';
+  // copper ports in odd/even columns, SFP block at end
+  const copper=ports.filter(p=>!p.sfp), sfp=ports.filter(p=>p.sfp);
+  const ordered=[];
+  for(let i=0;i<copper.length;i+=2){ordered.push(copper[i]);ordered.push(copper[i+1]||null)}
+  if(sfp.length){ordered.push(null,null);for(let i=0;i<sfp.length;i+=2){ordered.push(sfp[i]);ordered.push(sfp[i+1]||null)}}
+  ordered.forEach(p=>{
+    if(!p){const s=document.createElement('div');s.style.width='14px';wrap.appendChild(s);return}
+    const b=document.createElement('button');
+    const f=FAULTS[p.fault];
+    b.className='port'+(p.sfp?' sfp':'')+(sel===p?' sel':'')+(f.sev>=2?' bad':'');
+    b.title=`${p.name} — ${f.name}${p.desc?' — '+p.desc:''}`;
+    b.innerHTML=`<div class="jack"><div class="leds"><i class="led ${ledFor(p)}"></i>${p.poe&&p.fault!=='poe'&&!p.sfp?'<i class="led blue"></i>':''}</div></div><div class="num">${p.name.split('/').pop()}</div>`;
+    b.onclick=()=>{sel=p;render()};
+    wrap.appendChild(b);
+  });
+  const bad=ports.filter(p=>FAULTS[p.fault].sev>0).sort((a,b)=>FAULTS[b.fault].sev-FAULTS[a.fault].sev||a.idx-b.idx);
+  const up=ports.filter(p=>!['unused','notconnect','errdisable','admindown'].includes(p.fault)).length;
+  const hi=bad.filter(p=>FAULTS[p.fault].sev===3).length;
+  const score=Math.max(0,100-bad.reduce((s,p)=>s+[0,3,8,15][FAULTS[p.fault].sev],0));
+  $('#stats').innerHTML=`
+    <div class="stat"><b style="color:${score>85?'var(--green)':score>60?'var(--amber)':'var(--red)'}">${score}</b><small>Health score</small></div>
+    <div class="stat"><b>${up}/${ports.length}</b><small>Ports up</small></div>
+    <div class="stat"><b style="color:${bad.length?'var(--amber)':'var(--green)'}">${bad.length}</b><small>Ports with issues</small></div>
+    <div class="stat"><b style="color:${hi?'var(--red)':'var(--green)'}">${hi}</b><small>High severity</small></div>`;
+  $('#led-stat').className='led '+(hi?'red':bad.length?'amber':'green');
+  $('#led-poe').className='led '+(ports.some(p=>p.fault==='poe')?'amber':ports.some(p=>p.poe)?'green':'');
+  $('#issues').innerHTML=bad.length?bad.map(p=>{const f=FAULTS[p.fault];return `<button class="issue" data-i="${ports.indexOf(p)}"><span class="pname">${p.name}</span><span class="what">${f.name}${p.desc?` · <span class="note">${esc(p.desc)}</span>`:''}<small>${f.summary}</small></span><span class="sev sev-${f.sev}">${SEV[f.sev]}</span></button>`}).join(''):'<div class="empty">✓ No issues. Every port looks healthy.</div>';
+  document.querySelectorAll('.issue').forEach(b=>b.onclick=()=>{sel=ports[+b.dataset.i];render();if(innerWidth<1000)$('#detail').scrollIntoView({behavior:'smooth'})});
+  renderDetail();
+}
+function renderDetail(){
+  const d=$('#detail');
+  if(!sel){d.innerHTML='<h2>Port details</h2><div class="empty">Click a port on the switch to see what\'s going on.</div>';return}
+  const p=sel,f=FAULTS[p.fault];
+  const cls=f.sev===0?'ok':f.sev===3?'hi':'';
+  d.innerHTML=`
+    <h2>Port details</h2>
+    <div class="row" style="justify-content:space-between"><h3>${p.name}</h3><span class="sev sev-${f.sev}">${f.sev?SEV[f.sev]+' severity':'OK'}</span></div>
+    <div style="font-weight:600;margin-top:2px">${f.name}</div>
+    <dl class="kv">
+      <dt>Description</dt><dd>${esc(p.desc||'—')}</dd>
+      <dt>VLAN</dt><dd>${esc(p.vlan)}</dd>
+      ${p.speed?`<dt>Speed/Duplex</dt><dd>${esc(p.speed)} / ${esc(p.duplex)}</dd>`:''}
+      <dt>Type</dt><dd>${p.sfp?'SFP uplink':'Copper 10/100/1000'}${p.poe?' · PoE':''}</dd>
+    </dl>
+    <div class="explain ${cls}"><b>In plain English:</b> ${f.summary}</div>
+    <div class="section"><h4>What's happening</h4><div>${f.what}</div></div>
+    ${f.causes.length?`<div class="section"><h4>Likely causes</h4><ul>${f.causes.map(c=>`<li>${c}</li>`).join('')}</ul></div>`:''}
+    ${f.sev?`<div class="section"><h4>Impact</h4><div>${f.impact}</div></div>`:''}
+    <div class="section"><h4>Check it yourself</h4>${cmdBlock(f.cmds.join('\n'),p.name)}</div>
+    ${f.start?`<button class="btn primary" style="width:100%;margin-top:12px" id="b-fix">Start guided fix →</button>`:''}
+    <div class="section"><h4>Set fault manually</h4>
+      <div class="row"><select id="sel-fault">${FAULT_KEYS.map(k=>`<option value="${k}" ${k===p.fault?'selected':''}>${FAULTS[k].name}</option>`).join('')}</select>
+      <input id="in-desc" placeholder="Description" value="${esc(p.desc)}" style="flex:1;min-width:120px"></div>
+      <p class="note" style="margin:6px 0 0">Match this to what you see on your real switch.</p>
+    </div>`;
+  const fb=$('#b-fix');if(fb)fb.onclick=()=>openWizard(f.start,p,f.name);
+  $('#sel-fault').onchange=e=>{p.fault=e.target.value;save();render()};
+  $('#in-desc').onchange=e=>{p.desc=e.target.value;save();render()};
+}
+
+/* ---------------- WIZARD ---------------- */
+let hist=[],wizTitle='';
+function openWizard(start,port,title){ctxPort=port||null;wizTitle=title;hist=[start];$('#wiz').classList.add('open');drawWiz()}
+function closeWiz(){$('#wiz').classList.remove('open')}
+function drawWiz(){
+  const id=hist[hist.length-1],n=N[id],pn=ctxPort?ctxPort.name:null;
+  const crumbs=hist.map((h,i)=>`<span class="${i===hist.length-1?'cur':''}">${N[h].fix?(N[h].esc?'Escalate':'Fix'):'Step '+(i+1)}</span>`).join('');
+  let body='';
+  if(!n.fix){
+    body=`<div class="step-n">STEP ${hist.length}</div><div class="q">${n.text}</div>${n.detail?`<div class="qd">${n.detail}</div>`:''}
+      ${n.cmd?`<div class="section"><h4>Run this</h4>${cmdBlock(n.cmd,pn)}</div>`:''}
+      <div class="opts">${n.opts.map((o,i)=>`<button class="opt" data-n="${o[1]}">${o[0]}</button>`).join('')}</div>`;
+  }else{
+    body=`<div class="fixbox ${n.esc?'esc':''}"><div class="step-n">${n.esc?'NEXT STEPS':'SOLUTION'}</div><h3>${n.title}</h3>${n.text?`<div class="qd">${n.text}</div>`:''}
+      <ol>${n.steps.map(s=>`<li>${s.replaceAll('{p}',pn||'Gi1/0/X')}</li>`).join('')}</ol>
+      ${n.cmd?cmdBlock(n.cmd,pn):''}
+      ${n.verify?`<div class="verify"><b>✓ How to confirm it's fixed:</b> ${n.verify.replaceAll('{p}',pn||'Gi1/0/X')}</div>`:''}</div>
+      <div class="row" style="margin-top:14px">
+        ${ctxPort?`<button class="btn primary" id="w-resolved">It's fixed: mark ${ctxPort.name} healthy</button>`:`<button class="btn primary" id="w-done">It's fixed</button>`}
+        ${!n.esc?`<button class="btn" id="w-still">Still not working</button>`:''}
+      </div>`;
+  }
+  $('#wizbody').innerHTML=`
+    <div class="modal-head"><div><small>Guided fix${pn?' · '+pn:''}</small><h2>${wizTitle}</h2></div><button class="btn ghost small" id="w-x">✕ Close</button></div>
+    <div class="crumbs">${crumbs}</div>${body}
+    <div class="wiz-foot"><button class="btn ghost small" id="w-back" ${hist.length<2?'disabled style="opacity:.4"':''}>← Back</button><button class="btn ghost small" id="w-restart">Start over</button></div>`;
+  $('#w-x').onclick=closeWiz;
+  $('#w-back').onclick=()=>{if(hist.length>1){hist.pop();drawWiz()}};
+  $('#w-restart').onclick=()=>{hist=[hist[0]];drawWiz()};
+  document.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{hist.push(b.dataset.n);drawWiz();$('#wiz').scrollTop=0});
+  const r=$('#w-resolved');if(r)r.onclick=()=>{ctxPort.fault='ok';save();closeWiz();render();toast(ctxPort.name+' marked healthy')};
+  const dn=$('#w-done');if(dn)dn.onclick=()=>{closeWiz();toast('Nice work')};
+  const st=$('#w-still');if(st)st.onclick=()=>{hist.push('genE');drawWiz()};
+}
+E('genE','Still stuck? Collect this before escalating','A good escalation saves hours.',['Port name, connected device, and when it last worked.','Output of <code>show interfaces {p}</code> and <code>show logging | include {p}</code>.','What you already tried (the steps in this guide).','Whether other devices or ports are affected.','Send it all to your network team or vendor support (have the switch serial number ready: <code>show version</code>).']);
+
+/* ---------------- SYMPTOMS / LIBRARY ---------------- */
+$('#symgrid').innerHTML=SYMPTOMS.map((s,i)=>`<button class="sym" data-i="${i}"><div class="ic">${s.ic}</div><b>${s.t}</b><small>${s.d}</small></button>`).join('');
+document.querySelectorAll('.sym').forEach(b=>b.onclick=()=>{const s=SYMPTOMS[+b.dataset.i];openWizard(s.start,null,s.t)});
+$('#lib').innerHTML=FAULT_KEYS.filter(k=>FAULTS[k].start).map(k=>{const f=FAULTS[k];return `<div class="card"><h3>${f.name}<span class="sev sev-${f.sev}">${SEV[f.sev]}</span></h3>
+  <p><b>${f.summary}</b></p><p>${f.what}</p><div class="section"><h4>Common causes</h4><ul>${f.causes.map(c=>`<li>${c}</li>`).join('')}</ul></div>
+  <div class="section"><h4>Commands</h4>${cmdBlock(f.cmds.join('\n'))}</div>
+  <button class="btn small" data-k="${k}">Walk through the fix →</button></div>`}).join('');
+document.querySelectorAll('#lib [data-k]').forEach(b=>b.onclick=()=>{const f=FAULTS[b.dataset.k];openWizard(f.start,null,f.name)});
+
+/* ---------------- CLI IMPORT ---------------- */
+const SAMPLE=`Port      Name               Status       Vlan       Duplex  Speed Type
+Gi1/0/1   Front-Desk-PC      connected    10         a-full a-1000 10/100/1000BaseTX
+Gi1/0/2   Accounting-PC      connected    10         a-full a-1000 10/100/1000BaseTX
+Gi1/0/3   Old-Printer        connected    30         a-half  a-100 10/100/1000BaseTX
+Gi1/0/4                      notconnect   1            auto   auto 10/100/1000BaseTX
+Gi1/0/5   Conf-Room          err-disabled 10           auto   auto 10/100/1000BaseTX
+Gi1/0/6   Lab-Bench          disabled     1            auto   auto 10/100/1000BaseTX
+Gi1/0/7   Warehouse-Scanner  notconnect   10           auto   auto 10/100/1000BaseTX
+Gi1/0/8   Cam-Dock           inactive     40         a-full a-1000 10/100/1000BaseTX
+Gi1/0/9   Ops-PC-2           connected    10         a-full  a-100 10/100/1000BaseTX
+Gi1/0/10                     notconnect   1            auto   auto 10/100/1000BaseTX
+Gi1/1/1   UPLINK-CORE        connected    trunk        full    10G SFP-10GBase-SR
+Gi1/1/2                      notconnect   1            full   auto unknown`;
+function parseCLI(txt){
+  const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+  const hi=lines.findIndex(l=>/^\s*Port\s+/i.test(l)&&/Status/i.test(l));
+  if(hi<0)return null;
+  const h=lines[hi];const col=n=>h.search(new RegExp('\\b'+n+'\\b','i'));
+  const cN=col('Name'),cS=col('Status'),cV=col('Vlan'),cD=col('Duplex'),cSp=col('Speed'),cT=col('Type');
+  const out=[];
+  lines.slice(hi+1).forEach((l,i)=>{
+    if(/^-+/.test(l.trim()))return;
+    const name=l.slice(0,cN>0?cN:10).trim().split(/\s+/)[0];
+    if(!name||!/\d/.test(name))return;
+    // status/vlan/duplex/speed via tokens after Name column (more robust than fixed slicing)
+    const rest=l.slice(cS>0?cS-2:0).trim().split(/\s+/);
+    let [status,vlan,duplex,speed,...type]=rest;
+    const desc=cN>0&&cS>cN?l.slice(cN,cS).trim():'';
+    // if desc bled into status, find a known status token
+    const known=['connected','notconnect','err-disabled','disabled','inactive','monitoring','sfpAbsent','xcvrAbsent','noOperMem'];
+    const ki=rest.findIndex(t=>known.includes(t));
+    if(ki>0){[status,vlan,duplex,speed,...type]=rest.slice(ki)}
+    type=type.join(' ');
+    const isSfp=/SFP|10G|Base-[SL]X|BaseSR|BaseLR|unknown|Not Present/i.test(type)||/^(Te|Tw|Fo|Hu)/.test(name)||/\/1\/\d+$/.test(name);
+    let fault='ok';
+    if(status==='connected'){
+      if(/half/i.test(duplex))fault='duplex';
+      else if(/^(a-)?(10|100)$/.test(speed)&&/1000/.test(type))fault='speed';
+    }else if(status==='notconnect'||/Absent/.test(status))fault=desc?'notconnect':'unused';
+    else if(status==='err-disabled')fault='errdisable';
+    else if(status==='disabled')fault='admindown';
+    else if(status==='inactive')fault='vlan';
+    out.push(makePort(i,name,{desc,vlan:vlan||'',duplex:duplex||'',speed:speed||'',sfp:isSfp,fault}));
+  });
+  return out.length?out:null;
+}
+$('#b-sample').onclick=()=>{$('#cli').value=SAMPLE};
+$('#b-parse').onclick=()=>{
+  const r=parseCLI($('#cli').value);
+  if(!r){$('#parse-msg').textContent='Couldn\'t find a "Port … Status …" header. Paste the full command output, including the header line.';return}
+  ports=r;sel=r.find(p=>FAULTS[p.fault].sev>0)||r[0];
+  $('#model').textContent=`Imported switch · ${r.length} ports`;
+  save();render();show('switch');toast(`Imported ${r.length} ports`);
+};
+
+/* ---------------- MISC ---------------- */
+function rand(){
+  ports=defaultSwitch();
+  const pool=['notconnect','errdisable','duplex','crc','vlan','poe','flap','speed','admindown'];
+  ports.forEach(p=>{const r=Math.random();p.fault=r<.55?'ok':r<.75?'unused':pool[Math.floor(Math.random()*pool.length)];if(p.fault!=='unused')p.desc=p.sfp?'UPLINK':'Device-'+p.idx;p.poe=!p.sfp&&Math.random()<.3||p.fault==='poe'});
+  ports[24].fault='ok';ports[24].vlan='trunk';ports[24].desc='UPLINK-CORE';
+  sel=null;save();render();
+}
+function show(v){document.querySelectorAll('.view').forEach(x=>x.classList.toggle('active',x.id==='v-'+v));document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('active',b.dataset.v===v))}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+$('#b-demo').onclick=loadDemo;$('#b-rand').onclick=rand;
+$('#b-clear').onclick=()=>{ports.forEach(p=>{if(p.fault!=='unused')p.fault='ok'});save();render()};
+$('#b-import').onclick=()=>show('import');
+$('#wiz').onclick=e=>{if(e.target.id==='wiz')closeWiz()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWiz()});
+document.addEventListener('click',e=>{
+  if(e.target.classList.contains('copy')){
+    const t=e.target.parentElement.childNodes[1].textContent;
+    try{navigator.clipboard.writeText(t).then(()=>toast('Copied'),()=>toast('Copy blocked: select the text instead'))}catch(_){toast('Copy blocked: select the text instead')}
+  }
+});
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1800)}
+
+if(restore()){sel=ports.find(p=>FAULTS[p.fault]&&FAULTS[p.fault].sev>0)||null;render()}else loadDemo();
+</script>
+</body>
+</html>
