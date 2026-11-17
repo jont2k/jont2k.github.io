@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG Set & Reveal Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --text:#e7e9ee; --muted:#9aa2b1; --dim:#6b7280;
+    --gold:#d4a84b; --gold2:#f0c96a; --accent:#7c9cff;
+    --common:#c9ccd2; --uncommon:#a9c4d6; --rare:#e3c26c; --mythic:#f07a3a; --special:#b48ef0;
+    --ok:#59c48a; --warn:#e8b04a;
+    --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif}
+  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+  button{font:inherit;color:inherit;cursor:pointer}
+  header.top{position:sticky;top:0;z-index:20;background:rgba(15,17,21,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .topin{max-width:1500px;margin:0 auto;display:flex;align-items:center;gap:18px;padding:12px 20px}
+  .brand{font-family:Cinzel,serif;font-weight:700;font-size:20px;letter-spacing:.5px;color:var(--gold2);white-space:nowrap}
+  .brand small{display:block;font-family:Inter;font-weight:500;font-size:11px;color:var(--muted);letter-spacing:0}
+  nav.tabs{display:flex;gap:4px;background:var(--panel);padding:4px;border-radius:9px;border:1px solid var(--line)}
+  nav.tabs a{padding:7px 14px;border-radius:6px;color:var(--muted);font-weight:600;font-size:13px}
+  nav.tabs a.on{background:var(--panel2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+  nav.tabs a:hover{text-decoration:none;color:var(--text)}
+  .spacer{flex:1}
+  .status{font-size:12px;color:var(--muted)}
+  main{max-width:1500px;margin:0 auto;padding:20px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+  input[type=search],select{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 11px;font:inherit;outline:none}
+  input[type=search]{min-width:240px}
+  input[type=search]:focus,select:focus{border-color:var(--accent)}
+  .chk{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;user-select:none}
+  .btn{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 13px;font-weight:600;font-size:13px}
+  .btn:hover{border-color:var(--gold)}
+  .btn.primary{background:var(--gold);color:#1a1405;border-color:var(--gold)}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:var(--panel);border:0;padding:8px 12px;font-size:13px;color:var(--muted);font-weight:600}
+  .seg button.on{background:var(--panel2);color:var(--text)}
+  h2.sec{font-family:Cinzel,serif;font-size:17px;color:var(--gold2);margin:26px 0 10px;display:flex;align-items:baseline;gap:10px}
+  h2.sec .n{font-family:Inter;font-size:12px;color:var(--dim);font-weight:500}
+
+  /* set list */
+  .setgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:10px}
+  .setcard{display:flex;gap:12px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;cursor:pointer;transition:border-color .15s,transform .15s}
+  .setcard:hover{border-color:var(--gold);transform:translateY(-1px)}
+  .seticon{width:34px;height:34px;flex:none;display:grid;place-items:center;background:#e9e3d3;border-radius:8px;padding:5px}
+  .seticon img{width:100%;height:100%;object-fit:contain}
+  .setmeta{min-width:0;flex:1}
+  .setname{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .setsub{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+  .code{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--dim);text-transform:uppercase}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .pill.up{color:var(--gold2);border-color:rgba(212,168,75,.5);background:rgba(212,168,75,.08)}
+  .pill.new{color:var(--ok);border-color:rgba(89,196,138,.45);background:rgba(89,196,138,.08)}
+  .right{text-align:right;flex:none}
+  .date{font-weight:600;font-size:13px}
+
+  /* set header */
+  .sethead{display:flex;gap:18px;align-items:center;background:linear-gradient(135deg,#1d2029,#16181f);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:16px;flex-wrap:wrap}
+  .sethead .seticon{width:58px;height:58px;padding:8px;border-radius:12px}
+  .sethead h1{font-family:Cinzel,serif;margin:0;font-size:24px;color:var(--gold2)}
+  .stats{display:flex;gap:22px;flex-wrap:wrap;margin-top:8px}
+  .stat b{display:block;font-size:16px}
+  .stat span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .bar{height:6px;background:var(--panel2);border-radius:99px;overflow:hidden;margin-top:6px;width:200px}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2))}
+
+  /* card grid */
+  .daygroup{margin-bottom:8px}
+  .dayhead{position:sticky;top:61px;z-index:5;background:var(--bg);padding:12px 0 8px;display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);margin-bottom:12px}
+  .dayhead h3{margin:0;font-size:15px;font-weight:700}
+  .dayhead .rel{font-size:12px;color:var(--gold2);font-weight:600}
+  .dayhead .cnt{font-size:12px;color:var(--dim);margin-left:auto}
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s;display:flex;flex-direction:column}
+  .card:hover{transform:translateY(-2px);border-color:var(--gold)}
+  .imgwrap{aspect-ratio:488/680;background:#0b0c10;position:relative}
+  .imgwrap img{width:100%;height:100%;object-fit:cover;display:block}
+  .imgwrap .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--dim);font-size:12px;padding:10px;text-align:center}
+  .cinfo{padding:8px 10px 10px;display:flex;flex-direction:column;gap:3px}
+  .cname{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+  .rar{width:8px;height:8px;border-radius:50%;flex:none}
+  .r-common{background:var(--common)} .r-uncommon{background:var(--uncommon)} .r-rare{background:var(--rare)} .r-mythic{background:var(--mythic)} .r-special,.r-bonus{background:var(--special)}
+  .reveal{font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;gap:6px}
+  .reveal .d{color:var(--gold2);font-weight:600;white-space:nowrap}
+  .reveal .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .csub{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .empty,.loading,.err{padding:40px;text-align:center;color:var(--muted);background:var(--panel);border:1px dashed var(--line);border-radius:12px}
+  .err{color:#f19b9b;border-color:#5a2a2a}
+  .spinner{width:26px;height:26px;border:3px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 10px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .more{text-align:center;margin:24px 0}
+
+  /* modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:50;display:none;align-items:center;justify-content:center;padding:20px}
+  .modal.open{display:flex}
+  .mbox{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:900px;width:100%;max-height:92vh;overflow:auto;display:grid;grid-template-columns:minmax(240px,340px) 1fr;gap:22px;padding:22px;position:relative}
+  .mbox .x{position:absolute;top:10px;right:12px;background:none;border:0;font-size:22px;color:var(--muted)}
+  .mimgs{display:flex;flex-direction:column;gap:10px}
+  .mimgs img{width:100%;border-radius:14px;display:block}
+  .mtitle{font-family:Cinzel,serif;font-size:21px;color:var(--gold2);margin:0 26px 4px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .mana{display:inline-flex;gap:2px;vertical-align:middle}
+  .mana img{width:17px;height:17px}
+  .tline{color:var(--muted);margin-bottom:10px}
+  .otext{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;white-space:pre-wrap;margin-bottom:8px}
+  .otext img{width:15px;height:15px;vertical-align:-2px}
+  .flavor{font-style:italic;color:var(--muted);margin:6px 0 12px}
+  .kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px;font-size:13px;margin-top:12px}
+  .kv dt{color:var(--dim)} .kv dd{margin:0}
+  .revealbox{background:rgba(212,168,75,.08);border:1px solid rgba(212,168,75,.35);border-radius:10px;padding:12px 14px;margin:12px 0}
+  .revealbox b{color:var(--gold2)}
+  footer{max-width:1500px;margin:30px auto;padding:0 20px 30px;color:var(--dim);font-size:12px}
+  @media (max-width:720px){
+    .topin{flex-wrap:wrap;gap:10px}
+    .mbox{grid-template-columns:1fr}
+    .cards{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+    .dayhead{top:105px}
+    input[type=search]{min-width:0;flex:1}
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topin">
+    <div class="brand">Set &amp; Reveal Tracker<small>Magic: The Gathering · live from Scryfall</small></div>
+    <nav class="tabs">
+      <a href="#feed" data-v="feed">Reveal Feed</a>
+      <a href="#upcoming" data-v="upcoming">Upcoming</a>
+      <a href="#sets" data-v="sets">All Sets</a>
+    </nav>
+    <div class="spacer"></div>
+    <div class="status" id="status"></div>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+
+<footer>
+  Card data and images © Wizards of the Coast, served by <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
+  "Revealed" dates come from Scryfall's preview records (the date and outlet that first showed each card). Older sets often have no preview record.
+  Unofficial fan tool, not affiliated with Wizards of the Coast.
+</footer>
+
+<script>
+(() => {
+const API = 'https://api.scryfall.com';
+const $ = (s, el=document) => el.querySelector(s);
+const app = $('#app');
+const statusEl = $('#status');
+const TODAY = isoDate(new Date());
+
+const SET_TYPES = {
+  expansion:'Expansion', core:'Core', masters:'Masters', draft_innovation:'Draft Innovation',
+  commander:'Commander', alchemy:'Alchemy', funny:'Un-set', starter:'Starter', box:'Box set',
+  duel_deck:'Duel Deck', from_the_vault:'From the Vault', premium_deck:'Premium Deck',
+  masterpiece:'Masterpiece', arsenal:'Arsenal', spellbook:'Spellbook', planechase:'Planechase',
+  archenemy:'Archenemy', vanguard:'Vanguard', promo:'Promo', token:'Token', memorabilia:'Memorabilia',
+  treasure_chest:'Treasure Chest', minigame:'Minigame', eternal:'Eternal'
+};
+const MAIN_TYPES = ['expansion','core','masters','draft_innovation','commander','funny','eternal','starter','box'];
+
+/* ---------- utilities ---------- */
+function isoDate(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+function parseISO(s){ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function daysBetween(a,b){ return Math.round((parseISO(b)-parseISO(a))/86400000); }
+function fmtDate(s, opts={month:'short',day:'numeric',year:'numeric'}){ return s ? parseISO(s).toLocaleDateString(undefined,opts) : '—'; }
+function fmtLong(s){ return fmtDate(s,{weekday:'short',month:'short',day:'numeric',year:'numeric'}); }
+function relDay(s){
+  const n = daysBetween(TODAY, s);
+  if (n===0) return 'Today'; if (n===-1) return 'Yesterday'; if (n===1) return 'Tomorrow';
+  if (n<0) return `${-n} days ago`; return `in ${n} days`;
+}
+function esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function setStatus(t){ statusEl.textContent = t||''; }
+
+let lastReq = 0;
+async function api(url){
+  // Scryfall asks for 50–100ms between requests
+  const wait = 110 - (Date.now()-lastReq); if (wait>0) await sleep(wait);
+  lastReq = Date.now();
+  const r = await fetch(url.startsWith('http')?url:API+url, {headers:{Accept:'application/json'}});
+  const j = await r.json().catch(()=>null);
+  if (!r.ok){
+    if (r.status===404 && j && j.object==='error') return {object:'list',data:[],has_more:false,total_cards:0};
+    throw new Error((j&&j.details)||`HTTP ${r.status}`);
+  }
+  return j;
+}
+function cacheGet(k, maxAgeMs){
+  try{ const v=JSON.parse(localStorage.getItem(k)); if(v && Date.now()-v.t<maxAgeMs) return v.d; }catch(e){}
+  return null;
+}
+function cacheSet(k,d){ try{ localStorage.setItem(k, JSON.stringify({t:Date.now(),d})); }catch(e){} }
+
+function cardImg(c, size='normal'){
+  if (c.image_uris) return c.image_uris[size];
+  if (c.card_faces && c.card_faces[0].image_uris) return c.card_faces[0].image_uris[size];
+  return null;
+}
+function revealDate(c){ return c.preview && c.preview.previewed_at || null; }
+function manaHTML(cost){
+  if (!cost) return '';
+  return '<span class="mana">' + cost.replace(/\{([^}]+)\}/g,(m,s)=>{
+    const f = s.replace(/\//g,'').toUpperCase();
+    return `<img src="https://svgs.scryfall.io/card-symbols/${encodeURIComponent(f)}.svg" alt="{${esc(s)}}" title="{${esc(s)}}">`;
+  }) + '</span>';
+}
+function symbolize(text){
+  return esc(text).replace(/\{([^}]+)\}/g,(m,s)=>{
+    const f=s.replace(/\//g,'').toUpperCase();
+    return `<img src="https://svgs.scryfall.io/card-symbols/${encodeURIComponent(f)}.svg" alt="{${esc(s)}}">`;
+  });
+}
+
+/* ---------- data: sets ---------- */
+let SETS = null;
+async function loadSets(){
+  if (SETS) return SETS;
+  const cached = cacheGet('mtgtrk_sets', 6*3600e3);
+  if (cached){ SETS = cached; return SETS; }
+  setStatus('Loading sets…');
+  const j = await api('/sets');
+  SETS = j.data.map(s=>({
+    code:s.code, name:s.name, type:s.set_type, released:s.released_at||null, count:s.card_count,
+    icon:s.icon_svg_uri, parent:s.parent_set_code||null, digital:s.digital, block:s.block||null,
+    uri:s.scryfall_uri
+  }));
+  cacheSet('mtgtrk_sets', SETS);
+  setStatus('');
+  return SETS;
+}
+const setByCode = code => (SETS||[]).find(s=>s.code===code);
+
+/* ---------- data: cards (paged search) ---------- */
+async function searchAll(q, {order='spoiled', dir='desc', maxPages=Infinity, onPage}={}){
+  let url = `/cards/search?q=${encodeURIComponent(q)}&order=${order}&dir=${dir}&unique=prints&include_extras=true&include_variations=true`;
+  const all = []; let page=0, total=0, hasMore=false, next=null;
+  while (url && page < maxPages){
+    const j = await api(url);
+    all.push(...j.data); total = j.total_cards||all.length; page++;
+    hasMore = !!j.has_more; next = j.next_page || null;
+    onPage && onPage(all.length, total);
+    url = hasMore ? next : null;
+  }
+  return {cards:all, total, next: hasMore ? next : null};
+}
+
+/* ---------- rendering helpers ---------- */
+function loadingHTML(t='Loading…'){ return `<div class="loading"><div class="spinner"></div>${esc(t)}</div>`; }
+function errHTML(e){ return `<div class="err">Couldn't reach Scryfall: ${esc(e.message||e)}<br><br><button class="btn" onclick="location.reload()">Retry</button></div>`; }
+
+function setIcon(s){ return `<div class="seticon">${s&&s.icon?`<img src="${esc(s.icon)}" alt="" loading="lazy">`:''}</div>`; }
+
+function setCardHTML(s){
+  const n = s.released ? daysBetween(TODAY, s.released) : null;
+  let pill = '';
+  if (n!==null && n>0) pill = `<span class="pill up">in ${n} day${n===1?'':'s'}</span>`;
+  else if (n!==null && n>-30) pill = `<span class="pill new">New</span>`;
+  return `<div class="setcard" data-set="${esc(s.code)}">
+    ${setIcon(s)}
+    <div class="setmeta">
+      <div class="setname">${esc(s.name)}</div>
+      <div class="setsub"><span class="code">${esc(s.code)}</span><span>${esc(SET_TYPES[s.type]||s.type)}</span><span>${s.count} cards</span>${s.digital?'<span>Digital</span>':''}</div>
+    </div>
+    <div class="right"><div class="date">${fmtDate(s.released)}</div>${pill}</div>
+  </div>`;
+}
+
+function cardHTML(c, {showSet=false}={}){
+  const img = cardImg(c,'normal');
+  const rd = revealDate(c);
+  const src = c.preview && c.preview.source;
+  return `<div class="card" data-id="${esc(c.id)}">
+    <div class="imgwrap">${img?`<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy">`:`<div class="ph">${esc(c.name)}</div>`}</div>
+    <div class="cinfo">
+      <div class="cname"><span class="rar r-${esc(c.rarity)}" title="${esc(c.rarity)}"></span>${esc(c.name)}</div>
+      ${showSet?`<div class="csub">${esc(c.set_name)} · #${esc(c.collector_number)}</div>`:`<div class="csub">#${esc(c.collector_number)} · ${esc(c.type_line||'')}</div>`}
+      <div class="reveal">${rd?`<span class="d">${fmtDate(rd,{month:'short',day:'numeric'})}</span><span class="s" title="${esc(src||'')}">${esc(src||'')}</span>`:`<span class="s">No reveal record</span>`}</div>
+    </div>
+  </div>`;
+}
+
+const CARD_INDEX = new Map();
+function indexCards(cards){ cards.forEach(c=>CARD_INDEX.set(c.id,c)); }
+
+function groupByReveal(cards){
+  const groups = new Map();
+  for (const c of cards){
+    const k = revealDate(c) || 'none';
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(c);
+  }
+  const keys = [...groups.keys()].filter(k=>k!=='none').sort().reverse();
+  if (groups.has('none')) keys.push('none');
+  return keys.map(k=>({key:k, cards:groups.get(k)}));
+}
+
+function dayGroupsHTML(groups, opts){
+  return groups.map(g=>`<section class="daygroup">
+    <div class="dayhead">
+      <h3>${g.key==='none'?'No reveal date recorded':fmtLong(g.key)}</h3>
+      ${g.key!=='none'?`<span class="rel">${relDay(g.key)}</span>`:''}
+      <span class="cnt">${g.cards.length} card${g.cards.length===1?'':'s'}</span>
+    </div>
+    <div class="cards">${g.cards.map(c=>cardHTML(c,opts)).join('')}</div>
+  </section>`).join('');
+}
+
+function filterCards(cards, f){
+  const q = (f.q||'').toLowerCase().trim();
+  return cards.filter(c=>{
+    if (f.rarity && f.rarity!=='all' && c.rarity!==f.rarity) return false;
+    if (f.color && f.color!=='all'){
+      const ci = c.color_identity||[];
+      if (f.color==='C'){ if (ci.length) return false; }
+      else if (f.color==='M'){ if (ci.length<2) return false; }
+      else if (!ci.includes(f.color)) return false;
+    }
+    if (q){
+      const hay = (c.name+' '+(c.type_line||'')+' '+(c.oracle_text||(c.card_faces||[]).map(x=>x.oracle_text).join(' '))).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+const FILTER_CONTROLS = (f)=>`
+  <input type="search" id="fq" placeholder="Filter by name, type or rules text…" value="${esc(f.q||'')}">
+  <select id="frar">${['all','common','uncommon','rare','mythic','special','bonus'].map(r=>`<option value="${r}" ${f.rarity===r?'selected':''}>${r==='all'?'All rarities':r[0].toUpperCase()+r.slice(1)}</option>`).join('')}</select>
+  <select id="fcol">${[['all','All colors'],['W','White'],['U','Blue'],['B','Black'],['R','Red'],['G','Green'],['M','Multicolor'],['C','Colorless']].map(([v,l])=>`<option value="${v}" ${f.color===v?'selected':''}>${l}</option>`).join('')}</select>`;
+
+function bindFilters(f, rerender){
+  const deb = (fn)=>{ let t; return ()=>{ clearTimeout(t); t=setTimeout(fn,150); }; };
+  $('#fq').addEventListener('input', deb(()=>{ f.q=$('#fq').value; rerender(); }));
+  $('#frar').addEventListener('change', ()=>{ f.rarity=$('#frar').value; rerender(); });
+  $('#fcol').addEventListener('change', ()=>{ f.color=$('#fcol').value; rerender(); });
+}
+
+/* ---------- views ---------- */
+let viewToken = 0;
+
+async function viewFeed(){
+  const tok = ++viewToken;
+  const st = { days: 45, f:{q:'',rarity:'all',color:'all'}, hideNoDate:true, cards:[], next:null, total:0 };
+  try{ const sv = JSON.parse(localStorage.getItem('mtgtrk_feed')||'null'); if (sv && sv.days) st.days=sv.days; }catch(e){}
+
+  app.innerHTML = `
+    <div class="controls">
+      <div class="seg" id="win">${[[14,'2 weeks'],[45,'45 days'],[90,'90 days']].map(([d,l])=>`<button data-d="${d}" class="${st.days===d?'on':''}">${l}</button>`).join('')}</div>
+      ${FILTER_CONTROLS(st.f)}
+      <label class="chk"><input type="checkbox" id="hnd" checked> Only cards with a reveal date</label>
+    </div>
+    <div id="feedbody">${loadingHTML('Loading recent reveals…')}</div>`;
+
+  const body = $('#feedbody');
+  const render = ()=>{
+    let cards = filterCards(st.cards, st.f);
+    if (st.hideNoDate) cards = cards.filter(revealDate);
+    if (!cards.length){ body.innerHTML = `<div class="empty">No cards match.</div>`; return; }
+    body.innerHTML = `<p class="status" style="margin:0 0 4px">${st.cards.length} of ${st.total} printings released on or after ${fmtDate(cutoff())}, newest reveals first.</p>`
+      + dayGroupsHTML(groupByReveal(cards), {showSet:true})
+      + (st.next?`<div class="more"><button class="btn primary" id="more">Load more</button></div>`:'');
+    const m=$('#more'); if(m) m.onclick=async()=>{ m.disabled=true; m.textContent='Loading…'; await fetchMore(); render(); };
+  };
+  const cutoff = ()=>{ const d=new Date(); d.setDate(d.getDate()-st.days); return isoDate(d); };
+  const load = async (url)=>{
+    const j = await api(url);
+    if (tok!==viewToken) return;
+    st.cards.push(...j.data); indexCards(j.data);
+    st.total = j.total_cards; st.next = j.has_more ? j.next_page : null;
+  };
+  const start = async ()=>{
+    st.cards=[]; st.next=null; body.innerHTML = loadingHTML('Loading recent reveals…');
+    const q = `date>=${cutoff()} -is:digital -st:token -st:memorabilia`;
+    const url = `/cards/search?q=${encodeURIComponent(q)}&order=spoiled&dir=desc&unique=prints&include_extras=true`;
+    try{
+      await load(url);
+      // grab a couple more pages up front so the feed is substantial
+      for (let i=0;i<3 && st.next && tok===viewToken;i++) await load(st.next);
+      if (tok===viewToken) render();
+    }catch(e){ if (tok===viewToken) body.innerHTML = errHTML(e); }
+  };
+  const fetchMore = async()=>{ for(let i=0;i<2 && st.next;i++) await load(st.next); };
+
+  $('#win').addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    st.days=+b.dataset.d; try{localStorage.setItem('mtgtrk_feed',JSON.stringify({days:st.days}))}catch(_){}
+    [...$('#win').children].forEach(x=>x.classList.toggle('on',x===b)); start();
+  });
+  $('#hnd').addEventListener('change', e=>{ st.hideNoDate=e.target.checked; render(); });
+  bindFilters(st.f, render);
+  start();
+}
+
+async function viewUpcoming(){
+  const tok = ++viewToken;
+  app.innerHTML = loadingHTML('Loading sets…');
+  try{
+    const sets = await loadSets(); if (tok!==viewToken) return;
+    const up = sets.filter(s=>s.released && s.released>TODAY && !s.digital).sort((a,b)=>a.released.localeCompare(b.released));
+    const recent = sets.filter(s=>s.released && s.released<=TODAY && daysBetween(s.released,TODAY)<=90 && !s.digital).sort((a,b)=>b.released.localeCompare(a.released));
+    const byMonth = new Map();
+    up.forEach(s=>{ const k=s.released.slice(0,7); if(!byMonth.has(k)) byMonth.set(k,[]); byMonth.get(k).push(s); });
+    app.innerHTML = `
+      <h2 class="sec">Upcoming releases <span class="n">${up.length} sets announced on Scryfall</span></h2>
+      ${up.length ? [...byMonth].map(([m,list])=>`
+        <h2 class="sec" style="font-size:14px;margin-top:16px">${parseISO(m+'-01').toLocaleDateString(undefined,{month:'long',year:'numeric'})}</h2>
+        <div class="setgrid">${list.map(setCardHTML).join('')}</div>`).join('') : '<div class="empty">No upcoming sets listed right now.</div>'}
+      <h2 class="sec">Released in the last 90 days <span class="n">${recent.length} sets</span></h2>
+      <div class="setgrid">${recent.map(setCardHTML).join('')}</div>`;
+  }catch(e){ app.innerHTML = errHTML(e); }
+}
+
+async function viewSets(){
+  const tok = ++viewToken;
+  app.innerHTML = loadingHTML('Loading sets…');
+  let sets; try{ sets = await loadSets(); }catch(e){ app.innerHTML = errHTML(e); return; }
+  if (tok!==viewToken) return;
+  const f = {q:'', type:'main', digital:false, year:'all'};
+  try{ Object.assign(f, JSON.parse(localStorage.getItem('mtgtrk_setf')||'{}')); }catch(e){}
+  const years = [...new Set(sets.map(s=>s.released&&s.released.slice(0,4)).filter(Boolean))].sort().reverse();
+  app.innerHTML = `
+    <div class="controls">
+      <input type="search" id="sq" placeholder="Search sets by name or code…" value="${esc(f.q)}">
+      <select id="stype">
+        <option value="main">Main products</option><option value="all">All set types</option>
+        ${Object.entries(SET_TYPES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
+      </select>
+      <select id="syear"><option value="all">All years</option>${years.map(y=>`<option>${y}</option>`).join('')}</select>
+      <label class="chk"><input type="checkbox" id="sdig"> Include digital-only</label>
+    </div>
+    <div id="setsbody"></div>`;
+  $('#stype').value=f.type; $('#syear').value=f.year; $('#sdig').checked=f.digital;
+  const render = ()=>{
+    try{ localStorage.setItem('mtgtrk_setf', JSON.stringify(f)); }catch(e){}
+    const q=f.q.toLowerCase().trim();
+    const list = sets.filter(s=>{
+      if (!f.digital && s.digital) return false;
+      if (f.type==='main' && !MAIN_TYPES.includes(s.type)) return false;
+      if (f.type!=='main' && f.type!=='all' && s.type!==f.type) return false;
+      if (f.year!=='all' && !(s.released||'').startsWith(f.year)) return false;
+      if (q && !(s.name.toLowerCase().includes(q) || s.code.includes(q))) return false;
+      return true;
+    }).sort((a,b)=>(b.released||'').localeCompare(a.released||''));
+    const byYear = new Map();
+    list.forEach(s=>{ const y=(s.released||'????').slice(0,4); if(!byYear.has(y)) byYear.set(y,[]); byYear.get(y).push(s); });
+    $('#setsbody').innerHTML = list.length ? [...byYear].map(([y,l])=>`
+      <h2 class="sec">${y} <span class="n">${l.length} set${l.length===1?'':'s'}</span></h2>
+      <div class="setgrid">${l.map(setCardHTML).join('')}</div>`).join('') : '<div class="empty">No sets match.</div>';
+  };
+  let t; $('#sq').addEventListener('input',()=>{ clearTimeout(t); t=setTimeout(()=>{ f.q=$('#sq').value; render(); },120); });
+  $('#stype').addEventListener('change',()=>{ f.type=$('#stype').value; render(); });
+  $('#syear').addEventListener('change',()=>{ f.year=$('#syear').value; render(); });
+  $('#sdig').addEventListener('change',()=>{ f.digital=$('#sdig').checked; render(); });
+  render();
+}
+
+async function viewSet(code){
+  const tok = ++viewToken;
+  app.innerHTML = loadingHTML('Loading set…');
+  let s;
+  try{ await loadSets(); s = setByCode(code); }catch(e){ app.innerHTML = errHTML(e); return; }
+  if (!s){ app.innerHTML = `<div class="empty">Set “${esc(code)}” not found.</div>`; return; }
+  const st = { group:'reveal', f:{q:'',rarity:'all',color:'all'}, cards:[] };
+  const n = s.released ? daysBetween(TODAY, s.released) : null;
+  const parent = s.parent ? setByCode(s.parent) : null;
+  const children = SETS.filter(x=>x.parent===s.code);
+
+  app.innerHTML = `
+    <p style="margin:0 0 12px"><a href="#sets">← All sets</a></p>
+    <div class="sethead">
+      ${setIcon(s)}
+      <div style="flex:1;min-width:240px">
+        <h1>${esc(s.name)}</h1>
+        <div class="setsub"><span class="code">${esc(s.code)}</span><span>${esc(SET_TYPES[s.type]||s.type)}</span>${s.block?`<span>${esc(s.block)} block</span>`:''}
+          ${parent?`<span>Part of <a href="#set-${esc(parent.code)}">${esc(parent.name)}</a></span>`:''}</div>
+        <div class="stats" id="sstats">
+          <div class="stat"><b>${fmtDate(s.released)}</b><span>Release date</span></div>
+          <div class="stat"><b>${n===null?'—':n>0?`${n} days`:n===0?'Today':`${-n} days ago`}</b><span>${n>0?'Until release':'Since release'}</span></div>
+          <div class="stat"><b>${s.count}</b><span>Cards in set</span></div>
+        </div>
+      </div>
+      <div><a class="btn" href="${esc(s.uri)}" target="_blank" rel="noopener">View on Scryfall ↗</a></div>
+    </div>
+    ${children.length?`<div class="controls" style="margin-top:-4px"><span class="status">Related:</span>${children.map(c=>`<a class="pill" href="#set-${esc(c.code)}">${esc(c.name)}</a>`).join('')}</div>`:''}
+    <div class="controls">
+      <div class="seg" id="grp"><button data-g="reveal" class="on">By reveal date</button><button data-g="number">By collector #</button></div>
+      ${FILTER_CONTROLS(st.f)}
+    </div>
+    <div id="setbody">${loadingHTML('Loading cards…')}</div>`;
+
+  const body = $('#setbody');
+  const render = ()=>{
+    const cards = filterCards(st.cards, st.f);
+    if (!st.cards.length){ body.innerHTML = `<div class="empty">No cards from this set are on Scryfall yet.</div>`; return; }
+    if (!cards.length){ body.innerHTML = `<div class="empty">No cards match.</div>`; return; }
+    if (st.group==='reveal'){
+      body.innerHTML = dayGroupsHTML(groupByReveal(cards));
+    } else {
+      const sorted = [...cards].sort((a,b)=>(parseInt(a.collector_number)||0)-(parseInt(b.collector_number)||0) || a.collector_number.localeCompare(b.collector_number));
+      body.innerHTML = `<div class="cards">${sorted.map(c=>cardHTML(c)).join('')}</div>`;
+    }
+  };
+  $('#grp').addEventListener('click', e=>{
+    const b=e.target.closest('button'); if(!b) return; st.group=b.dataset.g;
+    [...$('#grp').children].forEach(x=>x.classList.toggle('on',x===b)); render();
+  });
+  bindFilters(st.f, render);
+
+  try{
+    const r = await searchAll(`e:${s.code}`, {onPage:(got,total)=>{ if(tok===viewToken) body.innerHTML = loadingHTML(`Loading cards… ${got} / ${total}`); }});
+    if (tok!==viewToken) return;
+    st.cards = r.cards; indexCards(r.cards);
+    // reveal stats
+    const dates = r.cards.map(revealDate).filter(Boolean).sort();
+    const withDate = dates.length;
+    const extra = [];
+    if (dates.length){
+      extra.push(`<div class="stat"><b>${fmtDate(dates[0])}</b><span>First reveal</span></div>`);
+      extra.push(`<div class="stat"><b>${fmtDate(dates[dates.length-1])}</b><span>Latest reveal</span></div>`);
+    }
+    extra.push(`<div class="stat"><b>${r.cards.length}${s.count?` / ${s.count}`:''}</b><span>On Scryfall${n>0?' (revealed)':''}</span>
+      ${s.count?`<div class="bar"><i style="width:${Math.min(100,Math.round(r.cards.length/s.count*100))}%"></i></div>`:''}</div>`);
+    if (r.cards.length) extra.push(`<div class="stat"><b>${withDate}</b><span>With reveal date</span></div>`);
+    $('#sstats').insertAdjacentHTML('beforeend', extra.join(''));
+    if (!withDate) { st.group='number'; [...$('#grp').children].forEach(x=>x.classList.toggle('on',x.dataset.g==='number')); }
+    render();
+  }catch(e){ if (tok===viewToken) body.innerHTML = errHTML(e); }
+}
+
+/* ---------- card modal ---------- */
+function openCard(id){
+  const c = CARD_INDEX.get(id); if (!c) return;
+  const faces = c.card_faces && c.card_faces.length ? c.card_faces : [c];
+  const imgs = (c.image_uris ? [c.image_uris.large] : faces.map(f=>f.image_uris&&f.image_uris.large)).filter(Boolean);
+  const rd = revealDate(c);
+  const p = c.preview||{};
+  const set = setByCode(c.set);
+  const price = c.prices && (c.prices.usd ? `$${c.prices.usd}` : c.prices.usd_foil ? `$${c.prices.usd_foil} (foil)` : null);
+  $('#mbox').innerHTML = `
+    <button class="x" aria-label="Close">×</button>
+    <div class="mimgs">${imgs.map(u=>`<img src="${esc(u)}" alt="${esc(c.name)}">`).join('') || `<div class="empty">No image yet</div>`}</div>
+    <div>
+      ${faces.map((f,i)=>`
+        <h2 class="mtitle">${esc(f.name)} ${manaHTML(f.mana_cost)}</h2>
+        <div class="tline">${esc(f.type_line||'')}${f.power!=null?` · ${esc(f.power)}/${esc(f.toughness)}`:''}${f.loyalty!=null?` · Loyalty ${esc(f.loyalty)}`:''}</div>
+        ${f.oracle_text?`<div class="otext">${symbolize(f.oracle_text)}</div>`:''}
+        ${f.flavor_text?`<div class="flavor">${esc(f.flavor_text)}</div>`:''}
+      `).join('')}
+      <div class="revealbox">
+        ${rd ? `<div><b>Revealed ${fmtLong(rd)}</b> <span class="status">(${relDay(rd)})</span></div>
+          ${p.source?`<div>Source: ${p.source_uri?`<a href="${esc(p.source_uri)}" target="_blank" rel="noopener">${esc(p.source)} ↗</a>`:esc(p.source)}</div>`:''}`
+          : `<div>No reveal record on Scryfall for this printing.</div>`}
+      </div>
+      <dl class="kv">
+        <dt>Set</dt><dd>${set?`<a href="#set-${esc(set.code)}">${esc(c.set_name)}</a>`:esc(c.set_name)} <span class="code">${esc(c.set)}</span></dd>
+        <dt>Set release</dt><dd>${fmtDate(c.released_at)}${c.released_at>TODAY?` <span class="pill up">${relDay(c.released_at)}</span>`:''}</dd>
+        <dt>Collector #</dt><dd>${esc(c.collector_number)}</dd>
+        <dt>Rarity</dt><dd style="text-transform:capitalize">${esc(c.rarity)}</dd>
+        <dt>Artist</dt><dd>${esc(c.artist||'—')}</dd>
+        ${price?`<dt>Price</dt><dd>${esc(price)}</dd>`:''}
+        <dt>Links</dt><dd><a href="${esc(c.scryfall_uri)}" target="_blank" rel="noopener">Scryfall ↗</a></dd>
+      </dl>
+    </div>`;
+  $('#modal').classList.add('open');
+  $('#mbox .x').onclick = closeCard;
+}
+function closeCard(){ $('#modal').classList.remove('open'); }
+$('#modal').addEventListener('click', e=>{ if (e.target.id==='modal') closeCard(); });
+document.addEventListener('keydown', e=>{ if (e.key==='Escape') closeCard(); });
+
+/* ---------- global clicks + routing ---------- */
+app.addEventListener('click', e=>{
+  const card = e.target.closest('.card'); if (card){ openCard(card.dataset.id); return; }
+  const sc = e.target.closest('.setcard'); if (sc){ location.hash = 'set-'+sc.dataset.set; }
+});
+
+function route(){
+  closeCard();
+  const h = (location.hash||'').slice(1) || 'feed';
+  document.querySelectorAll('nav.tabs a').forEach(a=>a.classList.toggle('on', a.dataset.v===h || (h.startsWith('set-') && a.dataset.v==='sets')));
+  window.scrollTo(0,0);
+  if (h==='feed') return viewFeed();
+  if (h==='upcoming') return viewUpcoming();
+  if (h==='sets') return viewSets();
+  if (h.startsWith('set-')) return viewSet(h.slice(4).toLowerCase());
+  return viewFeed();
+}
+window.addEventListener('hashchange', route);
+loadSets().catch(()=>{});
+route();
+})();
+</script>
+</body>
+</html>

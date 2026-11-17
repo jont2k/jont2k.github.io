@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#10192B"/>
+  <g stroke="#2B374B" stroke-width="8">
+    <rect x="96" y="120" width="170" height="240" rx="14" fill="#151E2E" transform="rotate(-12 181 240)"/>
+    <rect x="170" y="104" width="170" height="240" rx="14" fill="#1A2436" transform="rotate(4 255 224)"/>
+  </g>
+  <g transform="rotate(4 255 224)">
+    <rect x="190" y="126" width="130" height="96" rx="8" fill="#D4A84B" fill-opacity=".25"/>
+    <rect x="190" y="238" width="130" height="14" rx="7" fill="#4A566B"/>
+    <rect x="190" y="264" width="96" height="14" rx="7" fill="#4A566B"/>
+    <rect x="190" y="290" width="112" height="14" rx="7" fill="#4A566B"/>
+  </g>
+  <rect x="290" y="270" width="150" height="140" rx="16" fill="#F0C96A"/>
+  <rect x="290" y="270" width="150" height="38" rx="16" fill="#D4A84B"/>
+  <rect x="290" y="292" width="150" height="16" fill="#D4A84B"/>
+  <path d="M325 258v28M405 258v28" stroke="#F0C96A" stroke-width="12" stroke-linecap="round"/>
+  <g fill="#10192B"><rect x="314" y="326" width="22" height="18" rx="4"/><rect x="354" y="326" width="22" height="18" rx="4"/><rect x="394" y="326" width="22" height="18" rx="4"/><rect x="314" y="360" width="22" height="18" rx="4"/><rect x="354" y="360" width="22" height="18" rx="4"/></g>
+  <rect x="394" y="360" width="22" height="18" rx="4" fill="#5CCF8A"/>
+</svg>
