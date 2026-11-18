@@ -10,7 +10,8 @@ A single-page web app that helps you understand network switch port faults and f
 - **Guided fixes**: decision-tree troubleshooting with copyable commands at every step. Each path ends in a fix with a way to confirm it worked, or a checklist of what to collect before escalating.
 - **Troubleshoot a symptom**: start from what you're seeing ("no network", "slow", "keeps dropping", "PoE device won't power on", "whole network is down") when you don't know which port is at fault.
 - **Fault library**: err-disabled, no link, duplex mismatch, CRC errors, VLAN problems, spanning-tree blocking, PoE faults, link flapping, low negotiated speed, and admin-down ports.
-- **Import from CLI**: paste `show interfaces status` output from a Cisco-style switch and every port is mapped to a likely fault.
+- **Cisco and Dell support**: a Switch menu changes every command, port name and config snippet to match Cisco IOS, Dell N-Series (OS6) or Dell OS10. Platform differences are handled, e.g. BPDU protection is switch-wide on N-Series, and OS10 needs `errdisable detect cause bpduguard` before BPDU guard shuts a port.
+- **Import from CLI**: paste `show interfaces status` (Cisco, Dell N-Series) or `show interface status` (Dell OS10). The format is detected automatically and every port is mapped to a likely fault.
 
 ## Running
 
@@ -18,8 +19,8 @@ No build step and no dependencies. Open `index.html` in a browser, or visit the 
 
 ## Tech
 
-Vanilla HTML/CSS/JavaScript. Troubleshooting flows are a graph of question and fix nodes, so paths can cross between faults (e.g. CRC errors → duplex mismatch). The CLI parser locates columns from the header line. Port state is saved in localStorage.
+Vanilla HTML/CSS/JavaScript. Troubleshooting flows are a graph of question and fix nodes, so paths can cross between faults (e.g. CRC errors → duplex mismatch). Each command is written once in Cisco syntax and translated per vendor through a line-by-line map. The CLI parser detects the vendor from the header line and reads each row by its tokens. Port state and the chosen vendor are saved in localStorage.
 
 ## Notes
 
-Commands are Cisco IOS style. Most other vendors have close equivalents.
+Dell OS10 data-center switches don't supply PoE; Dell's PoE models (N1100, N1500, N2200, N3200) run OS6, so pick Dell N-Series for those. Exact syntax can vary by firmware version, so check `?` on your switch if a command is rejected.
