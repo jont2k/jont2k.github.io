@@ -10,8 +10,8 @@ A single-page web app that helps you understand network switch port faults and f
 - **Guided fixes**: decision-tree troubleshooting with copyable commands at every step. Each path ends in a fix with a way to confirm it worked, or a checklist of what to collect before escalating.
 - **Troubleshoot a symptom**: start from what you're seeing ("no network", "slow", "keeps dropping", "PoE device won't power on", "whole network is down") when you don't know which port is at fault.
 - **Fault library**: err-disabled, no link, duplex mismatch, CRC errors, VLAN problems, spanning-tree blocking, PoE faults, link flapping, low negotiated speed, and admin-down ports.
-- **Cisco and Dell support**: a Switch menu changes every command, port name and config snippet to match Cisco IOS, Dell N-Series (OS6) or Dell OS10. Platform differences are handled, e.g. BPDU protection is switch-wide on N-Series, and OS10 needs `errdisable detect cause bpduguard` before BPDU guard shuts a port.
-- **Import from CLI**: paste `show interfaces status` (Cisco, Dell N-Series) or `show interface status` (Dell OS10). The format is detected automatically and every port is mapped to a likely fault.
+- **Five switch platforms**: a Switch menu changes every command, port name and config snippet to match Cisco IOS, HPE Aruba CX (AOS-CX), Juniper EX (Junos), Dell N-Series (OS6) or Dell OS10. Platform differences are handled. For example, BPDU protection is switch-wide on Dell N-Series, Dell OS10 needs `errdisable detect cause bpduguard` before BPDU guard shuts a port, and Juniper fixes are written as `set`/`delete` statements applied with `commit`, with a `commit confirmed` safety tip.
+- **Import from CLI**: paste `show interfaces status` (Cisco, Dell N-Series), `show interface status` (Dell OS10), `show interface brief` (Aruba CX), or `show interfaces descriptions` / `show interfaces terse` (Juniper). The format is detected automatically and every port is mapped to a likely fault.
 
 ## Running
 
@@ -19,7 +19,7 @@ No build step and no dependencies. Open `index.html` in a browser, or visit the 
 
 ## Tech
 
-Vanilla HTML/CSS/JavaScript. Troubleshooting flows are a graph of question and fix nodes, so paths can cross between faults (e.g. CRC errors → duplex mismatch). Each command is written once in Cisco syntax and translated per vendor through a line-by-line map. The CLI parser detects the vendor from the header line and reads each row by its tokens. Port state and the chosen vendor are saved in localStorage.
+Vanilla HTML/CSS/JavaScript. Troubleshooting flows are a graph of question and fix nodes, so paths can cross between faults (e.g. CRC errors → duplex mismatch). Each command is written once in Cisco syntax and translated per vendor: line by line for the Cisco-like platforms, and as whole configuration blocks for Junos, which has no per-interface mode and stages changes until `commit`. The CLI parser detects the vendor from the header line and reads each row by its tokens. Port state and the chosen vendor are saved in localStorage.
 
 ## Notes
 

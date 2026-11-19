@@ -317,7 +317,7 @@ F('ncF_port','The switch port has failed','The original port is likely bad hardw
 E('ncE_nic','The problem is the device','Good cable, good port, still no link: the device\'s network card is the likely culprit.',['Check the NIC is enabled in the OS (Device Manager / Network settings).','Update or reinstall the NIC driver.','Try a USB-to-Ethernet adapter to confirm.','Hand off to desktop support if hardware replacement is needed.']);
 
 // Err-disabled
-Q('ed1','Why was the port err-disabled?','The reason column tells you which protection feature fired. Also check the log.','show interfaces status err-disabled\nshow logging | include ERR',[['bpduguard','ed_bpdu'],['psecure-violation (port security)','ed_psec'],['link-flap','fl1'],['udld','ed_udld'],['something else / not sure','edE']]);
+Q('ed1','Why did the switch disable the port?','The status output and the log name the protection feature that fired. Cisco calls this err-disabled; Aruba shows a reason in the Reason column; Juniper marks the port as blocked by BPDU protection or a MAC limit.','show interfaces status err-disabled\nshow logging | include ERR',[['BPDU guard / BPDU protection','ed_bpdu'],['Port security / MAC limit','ed_psec'],['Link flapping','fl1'],['UDLD / one-way fiber link','ed_udld'],['Something else / not sure','edE']]);
 Q('ed_bpdu','Is there a switch, hub, or bridged device plugged into this port?','BPDU Guard fires when a port meant for an end device receives spanning-tree packets, which only switches send. Look for a small desk switch, a home router, or a VM host bridging traffic.',null,[['Yes, found one','edF_bpdu_remove'],['No, it should be a switch link','edF_bpdu_trunk']]);
 F('edF_bpdu_remove','Remove the rogue switch, then reset the port','Unauthorized switches can create loops that take down the network.',['Unplug the switch/hub from the wall jack.','If the user needs more ports, request a proper drop or a managed switch from IT.','Reset the port (shutdown, then no shutdown).'],'configure terminal\ninterface {p}\n shutdown\n no shutdown\nend','Port shows <b>connected</b> and stays up. Watch the log for a few minutes for repeat BPDU Guard events.');
 F('edF_bpdu_trunk','This port connects a switch: change its role','BPDU Guard shouldn\'t be enabled on switch-to-switch links.',['Confirm with your network design that this is meant to be an uplink.','Remove PortFast and BPDU Guard from the interface.','Configure it as a trunk if it carries several VLANs.','Reset the port.'],'configure terminal\ninterface {p}\n no spanning-tree portfast\n no spanning-tree bpduguard enable\n switchport mode trunk\n shutdown\n no shutdown\nend','<code>show spanning-tree interface {p}</code> shows the port forwarding with a proper STP role.');
@@ -511,10 +511,147 @@ const OS10={
  'name PRINTERS':'description PRINTERS',
  'errdisable recovery cause all':'errdisable recovery cause bpduguard',
 };
+const ARUBA={
+ 'configure terminal':'configure',
+ 'copy running-config startup-config':'write memory',
+ 'interface Gi1/0/5':'interface 1/1/5',
+ 'interface range Gi1/0/1 - 24':'interface 1/1/1-1/1/24',
+ 'show interfaces status':'show interface brief',
+ 'show interfaces {p} status':'show interface {p} brief',
+ 'show interfaces status err-disabled':'show interface brief',
+ 'show errdisable recovery':null,
+ 'show logging | include ERR':'show logging -r',
+ 'show logging | include MACFLAP':'show logging -r',
+ 'show run interface {p}':'show running-config interface {p}',
+ 'show run interface {p} | include speed|duplex':'show running-config interface {p}',
+ 'show run interface {p} | include speed':'show running-config interface {p}',
+ 'show port-security interface {p}':'show running-config interface {p}',
+ 'show port-security address':'show mac-address-table port {p}',
+ 'clear port-security sticky interface {p}':'clear mac-address-table port {p}',
+ 'switchport port-security maximum 2':'port-access port-security client-limit 2',
+ 'duplex auto':null,'duplex full':null,'speed 100':'speed 100-full',
+ 'show interfaces {p} | include duplex':'show interface {p}',
+ 'show interfaces {p} counters errors':'show interface {p} error-statistics',
+ 'show interfaces {p} | include CRC|input errors':'show interface {p} error-statistics',
+ 'show interfaces {p}':'show interface {p}',
+ 'clear counters {p}':'clear interface {p} statistics',
+ 'show interfaces {p} transceiver':'show interface {p} dom detail',
+ 'show interfaces {p} transceiver detail':'show interface {p} dom detail',
+ 'show udld {p}':'show logging | include {p}',
+ 'show vlan brief':'show vlan',
+ 'show interfaces trunk':'show running-config interface {u}',
+ 'switchport mode access':'no routing',
+ 'switchport access vlan 10':'vlan access 10',
+ 'switchport access vlan 999':'vlan access 999',
+ 'switchport voice vlan 20':null,
+ 'switchport mode trunk':'no routing\nvlan trunk allowed all',
+ 'switchport trunk allowed vlan add 10':'vlan trunk allowed 10',
+ 'spanning-tree portfast':'spanning-tree port-type admin-edge',
+ 'no spanning-tree portfast':'no spanning-tree port-type',
+ 'spanning-tree bpduguard enable':'spanning-tree bpdu-guard',
+ 'no spanning-tree bpduguard enable':'no spanning-tree bpdu-guard',
+ 'spanning-tree vlan 1-4094 root primary':'spanning-tree priority 0\n! AOS-CX priority is a multiplier of 4096: 0 is the highest',
+ 'show spanning-tree interface {p}':'show spanning-tree',
+ 'show spanning-tree root':'show spanning-tree',
+ 'show spanning-tree blockedports':'show spanning-tree',
+ 'show power inline':'show power-over-ethernet',
+ 'show power inline {p}':'show power-over-ethernet {p}',
+ 'show power inline {p} detail':'show power-over-ethernet {p}',
+ 'power inline never':'no power-over-ethernet',
+ 'power inline auto':'power-over-ethernet',
+ 'power inline port priority high':'power-over-ethernet priority high',
+ 'no power efficient-ethernet':'no energy-efficient-ethernet',
+ 'storm-control broadcast level 5':'rate-limit broadcast 1000 pps',
+ 'show processes cpu sorted | exclude 0.00':'show system resource-utilization',
+ 'show interfaces | include broadcast':'show interface',
+ 'show interfaces {p} | include broadcast':'show interface {p}',
+ 'show interfaces {p} | include resets|changed':'show interface {p}',
+ 'show interfaces {p} | include Mb/s':'show interface {p} brief',
+ 'show interfaces {u} | include rate|error|duplex':'show interface {u}',
+ 'show etherchannel summary':'show lacp aggregates',
+ 'errdisable recovery cause all':'spanning-tree bpdu-guard timeout 300',
+ 'errdisable recovery interval 300':'spanning-tree bpdu-guard timeout 300',
+};
+// Junos: show/clear commands translate line by line...
+const JUNOS={
+ 'show interfaces status':'show interfaces terse',
+ 'show interfaces {p} status':'show interfaces {p} terse',
+ 'show interfaces status err-disabled':'show spanning-tree interface\nshow ethernet-switching interface',
+ 'show errdisable recovery':'show configuration protocols layer2-control',
+ 'show logging | include ERR':'show log messages | last 50',
+ 'show logging | include MACFLAP':'show log messages | match MAC',
+ 'show logging | include {p}':'show log messages | match {p}',
+ 'show run interface {p}':'show configuration interfaces {p}',
+ 'show run interface {p} | include speed|duplex':'show configuration interfaces {p}',
+ 'show run interface {p} | include speed':'show configuration interfaces {p}',
+ 'show port-security interface {p}':'show ethernet-switching interface {p}',
+ 'show port-security address':'show ethernet-switching table interface {p}',
+ 'show interfaces {p} | include duplex':'show interfaces {p}',
+ 'show interfaces {p} counters errors':'show interfaces {p} extensive | match error',
+ 'show interfaces {p} | include CRC|input errors':'show interfaces {p} extensive | match "CRC|FCS|error"',
+ 'show interfaces {p}':'show interfaces {p} detail',
+ 'clear counters {p}':'clear interfaces statistics {p}',
+ 'show interfaces {p} transceiver':'show interfaces diagnostics optics {p}',
+ 'show interfaces {p} transceiver detail':'show interfaces diagnostics optics {p}',
+ 'show udld {p}':'show interfaces diagnostics optics {p}',
+ 'show vlan brief':'show vlans',
+ 'show interfaces trunk':'show ethernet-switching interface {u}',
+ 'show spanning-tree root':'show spanning-tree bridge',
+ 'show spanning-tree blockedports':'show spanning-tree interface',
+ 'show spanning-tree detail':'show spanning-tree interface detail',
+ 'show power inline':'show poe controller',
+ 'show power inline {p}':'show poe interface {p}',
+ 'show power inline {p} detail':'show poe interface {p}',
+ 'show processes cpu sorted | exclude 0.00':'show chassis routing-engine',
+ 'show interfaces | include broadcast':'monitor interface traffic',
+ 'show interfaces {p} | include broadcast':'show interfaces {p} extensive | match broadcast',
+ 'show interfaces {p} | include resets|changed':'show interfaces {p} extensive | match flap',
+ 'show interfaces {p} | include Mb/s':'show interfaces {p}',
+ 'show interfaces {u} | include rate|error|duplex':'show interfaces {u} extensive | match "rate|error"',
+ 'show etherchannel summary':'show lacp interfaces',
+ 'show ip interface brief':'show interfaces terse irb',
+ // single commands quoted inside sentences
+ 'no shutdown':'delete interfaces {p} disable',
+ 'shutdown':'set interfaces {p} disable',
+ 'ip helper-address':'forwarding-options dhcp-relay',
+ 'errdisable recovery cause all':'set protocols layer2-control bpdu-block disable-timeout 300',
+ 'errdisable recovery interval 300':'set protocols layer2-control bpdu-block disable-timeout 300',
+};
+// ...but config changes are rewritten as whole blocks, because Junos has no per-interface mode and nothing applies until commit.
+const C='configure terminal\ninterface {p}\n';
+const JUNOS_BLOCKS={
+ [C+' no shutdown\nend\ncopy running-config startup-config']:'configure\ndelete interfaces {p} disable\ncommit and-quit',
+ [C+' speed auto\n duplex auto\nend']:'configure\ndelete interfaces {p} speed\ndelete interfaces {p} link-mode\nset interfaces {p} ether-options auto-negotiation\ncommit and-quit',
+ [C+' description BAD-PORT-DO-NOT-USE\n shutdown\nend']:'configure\nset interfaces {p} description BAD-PORT-DO-NOT-USE\nset interfaces {p} disable\ncommit and-quit',
+ [C+' shutdown\n no shutdown\nend']:'! after removing the rogue switch, re-enable the port:\nclear error bpdu interface {p}',
+ [C+' no spanning-tree portfast\n no spanning-tree bpduguard enable\n switchport mode trunk\n shutdown\n no shutdown\nend']:'configure\ndelete protocols rstp interface {p} edge\nset interfaces {p} unit 0 family ethernet-switching interface-mode trunk\ncommit and-quit\nclear error bpdu interface {p}',
+ ['clear port-security sticky interface {p}\n'+C+' switchport port-security maximum 2\n shutdown\n no shutdown\nend\ncopy running-config startup-config']:'clear ethernet-switching table interface {p}\nconfigure\nset switch-options interface {p} interface-mac-limit 2 packet-action shutdown\nset interfaces {p} unit 0 family ethernet-switching recovery-timeout 300\ncommit and-quit\nclear ethernet-switching recovery-timeout interface {p}',
+ ['show interfaces {p} transceiver\n'+C+' shutdown\n no shutdown\nend']:'show interfaces diagnostics optics {p}\n! bounce the port: disable, commit, then re-enable\nconfigure\nset interfaces {p} disable\ncommit\ndelete interfaces {p} disable\ncommit and-quit',
+ [C+' description UNUSED\n switchport access vlan 999\nend']:'configure\nset vlans PARKING vlan-id 999\nset interfaces {p} description UNUSED\nset interfaces {p} unit 0 family ethernet-switching vlan members PARKING\ncommit and-quit',
+ [C+' speed auto\n duplex auto\nend\nclear counters {p}']:'configure\ndelete interfaces {p} speed\ndelete interfaces {p} link-mode\nset interfaces {p} ether-options auto-negotiation\ncommit and-quit\nclear interfaces statistics {p}',
+ [C+' speed 100\n duplex full\nend']:'configure\nset interfaces {p} ether-options no-auto-negotiation\nset interfaces {p} speed 100m\nset interfaces {p} link-mode full-duplex\ncommit and-quit',
+ ['clear counters {p}\nshow interfaces {p} counters errors']:'clear interfaces statistics {p}\nshow interfaces {p} extensive | match error',
+ ['show interfaces {p} transceiver detail\nclear counters {p}']:'show interfaces diagnostics optics {p}\nclear interfaces statistics {p}',
+ [C+' switchport mode access\n switchport access vlan 10\n switchport voice vlan 20\nend']:'configure\nset interfaces {p} unit 0 family ethernet-switching interface-mode access\nset interfaces {p} unit 0 family ethernet-switching vlan members 10\nset switch-options voip interface {p}.0 vlan VOICE\ncommit and-quit',
+ ['configure terminal\nvlan 30\n name PRINTERS\nend\nshow vlan brief']:'configure\nset vlans PRINTERS vlan-id 30\ncommit and-quit\nshow vlans',
+ ['configure terminal\ninterface {u}\n switchport trunk allowed vlan add 10\nend']:'configure\nset interfaces {u} unit 0 family ethernet-switching vlan members 10\ncommit and-quit',
+ ['interface vlan 10\n ip helper-address 10.0.0.5']:'configure\nset forwarding-options dhcp-relay server-group DHCP-SERVERS 10.0.0.5\nset forwarding-options dhcp-relay group USERS active-server-group DHCP-SERVERS\nset forwarding-options dhcp-relay group USERS interface irb.10\ncommit and-quit',
+ [C+' spanning-tree portfast\n spanning-tree bpduguard enable\nend']:'configure\nset protocols rstp interface {p} edge\nset protocols rstp bpdu-block-on-edge\ncommit and-quit',
+ ['! on the CORE switch\nconfigure terminal\nspanning-tree vlan 1-4094 root primary\nend']:'! on the CORE switch\nconfigure\nset protocols rstp bridge-priority 4096\ncommit and-quit',
+ ['show power inline\nconfigure terminal\ninterface Gi1/0/5\n power inline never\ninterface {p}\n power inline port priority high\nend']:'show poe controller\nconfigure\nset poe interface ge-0/0/4 disable\nset poe interface {p} priority high\ncommit and-quit',
+ [C+' power inline never\n power inline auto\nend']:'configure\nset poe interface {p} disable\ncommit\ndelete poe interface {p} disable\ncommit and-quit',
+ [C+' no power efficient-ethernet\nend']:'! EEE is off by default on Junos; this removes it if someone enabled it\nconfigure\ndelete interfaces {p} ether-options ieee-802-3az-eee\ncommit and-quit',
+ [C+' description PRINTER-100M-ONLY\nend']:'configure\nset interfaces {p} description PRINTER-100M-ONLY\ncommit and-quit',
+ ['show logging | include MACFLAP\nconfigure terminal\ninterface range Gi1/0/1 - 24\n spanning-tree portfast\n spanning-tree bpduguard enable\n storm-control broadcast level 5\nend']:'show log messages | match MAC\nconfigure\nwildcard range set protocols rstp interface ge-0/0/[0-23] edge\nset protocols rstp bpdu-block-on-edge\nset forwarding-options storm-control-profiles SC-EDGE all bandwidth-level 100000\nwildcard range set interfaces ge-0/0/[0-23] unit 0 family ethernet-switching storm-control SC-EDGE\ncommit and-quit',
+};
 const POE_NOTE='! Dell OS10 switches don\'t supply PoE.\n! Dell\'s PoE models (N1100, N1500, N2200, N3200) run OS6:\n! choose "Dell N-Series" in the Switch menu at the top.';
 const VENDORS={
  cisco:{name:'Cisco IOS / IOS-XE',short:'Cisco',map:{},statusCmd:'show interfaces status',
    port:(n,s)=>(s?'Gi1/1/':'Gi1/0/')+n,log:p=>p,sample:'Gi1/0/X',uplink:'Gi1/1/1'},
+ aruba:{name:'HPE Aruba CX (AOS-CX)',short:'Aruba CX',map:ARUBA,statusCmd:'show interface brief',
+   port:(n,s)=>'1/1/'+(s?24+n:n),log:p=>p,sample:'1/1/X',uplink:'1/1/25'},
+ junos:{name:'Juniper EX (Junos)',short:'Juniper EX',map:JUNOS,blocks:JUNOS_BLOCKS,statusCmd:'show interfaces descriptions',
+   port:(n,s)=>(s?'xe-0/1/':'ge-0/0/')+(n-1),log:p=>p,sample:'ge-0/0/X',uplink:'xe-0/1/0'},
  dn6:{name:'Dell N-Series (OS6)',short:'Dell N-Series',map:DN6,statusCmd:'show interfaces status',
    port:(n,s)=>(s?'te1/0/':'gi1/0/')+n,log:p=>p.charAt(0).toUpperCase()+p.slice(1),sample:'gi1/0/X',uplink:'te1/0/1'},
  os10:{name:'Dell OS10 (PowerSwitch S/Z)',short:'Dell OS10',map:OS10,statusCmd:'show interface status',
@@ -525,7 +662,9 @@ const V=()=>VENDORS[vendor];
 function tokens(s,pn){const v=V(),p=pn||v.sample;return s.replaceAll('{p}',p).replaceAll('{pl}',v.log(p)).replaceAll('{u}',v.uplink)}
 // Translate a block of Cisco-syntax commands to the selected vendor
 function tx(block,pn){
-  const map=V().map,out=[];let bpdu='';
+  const v=V();
+  if(v.blocks&&Object.prototype.hasOwnProperty.call(v.blocks,block))return tokens(v.blocks[block],pn);
+  const map=v.map,out=[];let bpdu='';
   for(const line of block.split('\n')){
     const ind=line.match(/^\s*/)[0],key=line.trim();
     let r=Object.prototype.hasOwnProperty.call(map,key)?map[key]:key;
@@ -650,6 +789,7 @@ function drawWiz(){
   const id=hist[hist.length-1],n=N[id],pn=ctxPort?ctxPort.name:null;
   const crumbs=hist.map((h,i)=>`<span class="${i===hist.length-1?'cur':''}">${N[h].fix?(N[h].esc?'Escalate':'Fix'):'Step '+(i+1)}</span>`).join('');
   const poeWarn=vendor==='os10'&&/^pe/.test(id)?`<div class="explain" style="margin-bottom:12px"><b>Heads up:</b> Dell OS10 switches don't supply PoE. If your PoE switch is a Dell N1100, N1500, N2200 or N3200, it runs OS6: pick <b>Dell N-Series</b> in the Switch menu.</div>`:'';
+  const commitNote=vendor==='junos'&&n.cmd&&/\bcommit\b/.test(tx(n.cmd,pn))?`<div class="explain ok" style="margin-top:10px"><b>Junos tip:</b> nothing changes until you run <code>commit</code>. Use <code>commit confirmed 5</code> instead if the change could cut off your own connection: it rolls back automatically unless you <code>commit</code> again within 5 minutes. <code>rollback 1</code> undoes the last commit.</div>`:'';
   let body='';
   if(!n.fix){
     body=`${poeWarn}<div class="step-n">STEP ${hist.length}</div><div class="q">${txt(n.text,pn)}</div>${n.detail?`<div class="qd">${txt(n.detail,pn)}</div>`:''}
@@ -658,7 +798,7 @@ function drawWiz(){
   }else{
     body=`${poeWarn}<div class="fixbox ${n.esc?'esc':''}"><div class="step-n">${n.esc?'NEXT STEPS':'SOLUTION'}</div><h3>${n.title}</h3>${n.text?`<div class="qd">${txt(n.text,pn)}</div>`:''}
       <ol>${n.steps.map(s=>`<li>${txt(s,pn)}</li>`).join('')}</ol>
-      ${n.cmd?cmdBlock(n.cmd,pn):''}
+      ${n.cmd?cmdBlock(n.cmd,pn):''}${commitNote}
       ${n.verify?`<div class="verify"><b>✓ How to confirm it's fixed:</b> ${txt(n.verify,pn)}</div>`:''}</div>
       <div class="row" style="margin-top:14px">
         ${ctxPort?`<button class="btn primary" id="w-resolved">It's fixed: mark ${esc(ctxPort.name)} healthy</button>`:`<button class="btn primary" id="w-done">It's fixed</button>`}
@@ -706,6 +846,24 @@ Gi1/0/9   Ops-PC-2           connected    10         a-full  a-100 10/100/1000Ba
 Gi1/0/10                     notconnect   1            auto   auto 10/100/1000BaseTX
 Gi1/1/1   UPLINK-CORE        connected    trunk        full    10G SFP-10GBase-SR
 Gi1/1/2                      notconnect   1            full   auto unknown`,
+aruba:`--------------------------------------------------------------------------------------------------------------
+Port      Native  Mode   Type           Enabled Status  Reason                 Speed   Description
+          VLAN                                                                 (Mb/s)
+--------------------------------------------------------------------------------------------------------------
+1/1/1     10      access 1GbT           yes     up                             1000    Front-Desk-PC
+1/1/2     10      access 1GbT           yes     up                             1000    Accounting-PC
+1/1/3     30      access 1GbT           yes     up                             100     Old-Printer
+1/1/4     1       access 1GbT           yes     down    Waiting for link       --      --
+1/1/6     1       access 1GbT           no      down    Administratively down  --      Lab-Bench
+1/1/7     10      access 1GbT           yes     down    Waiting for link       --      Warehouse-Scanner
+1/1/25    1       trunk  SFP+SR         yes     up                             10000   UPLINK-CORE`,
+junos:`Interface       Admin Link Description
+ge-0/0/0        up    up   Front-Desk-PC
+ge-0/0/1        up    up   Accounting-PC
+ge-0/0/2        up    down Kiosk-01
+ge-0/0/5        down  down Lab-Bench
+ge-0/0/9        up    up   AP-Lobby
+xe-0/1/0        up    up   UPLINK-CORE`,
 dn6:`Port      Description     Duplex Speed   Neg  Link   Flow  M  VLAN
                                               State  Ctrl
 --------- --------------- ------ ------- ---- ------ ----- -- -------------------
@@ -730,6 +888,15 @@ Eth 1/1/5       Backup-NAS      down     0        full     A    10   -
 Eth 1/1/6       ESXi-Host-3     up       1000M    full     T    1    10,20,30
 Eth 1/1/25      UPLINK-CORE     up       25G      full     T    1    10-30`};
 const HELP={
+aruba:`<li><b>up</b>: healthy, unless a copper port linked at 10 or 100 Mb/s (<i>low speed</i>)</li>
+  <li><b>down · Waiting for link</b>: unused if the port has no description, <i>no link</i> if it has one</li>
+  <li><b>Enabled = no</b> or <b>Administratively down</b>: <i>administratively down</i></li>
+  <li><b>down</b> with any other reason (BPDU guard, loop protect, port security…): <i>err-disabled</i></li>
+  <li class="note">This output has no duplex column. Check <code>show interface 1/1/X</code> for duplex problems.</li>`,
+junos:`<li><b>Admin down</b>: <i>administratively down</i> (the port has <code>disable</code> set)</li>
+  <li><b>Admin up, Link up</b>: healthy</li>
+  <li><b>Admin up, Link down</b>: <i>no link</i> if the port has a description, otherwise unused</li>
+  <li class="note"><code>show interfaces descriptions</code> lists only ports that have a description. <code>show interfaces terse</code> lists every port but without descriptions; both are accepted. Neither shows speed, duplex or BPDU blocks: check <code>show interfaces ge-0/0/X</code> and <code>show spanning-tree interface</code>, then use <b>Set fault manually</b>.</li>`,
 cisco:`<li><b>connected</b>: healthy, unless duplex is half (<i>duplex mismatch</i>) or a gigabit port linked at 10/100 (<i>low speed</i>)</li>
   <li><b>notconnect</b>: unused if the port has no description, <i>no link</i> if it has one (something's supposed to be there)</li>
   <li><b>err-disabled</b>: <i>err-disabled</i></li><li><b>disabled</b>: <i>administratively down</i></li>
@@ -743,9 +910,11 @@ os10:`<li><b>up</b>: healthy, unless duplex is <b>half</b> (<i>duplex mismatch</
   <li class="note">OS10 shows err-disabled and shut-down ports as just <b>down</b>. Run <code>show errdisable recovery</code> and <code>show running-configuration</code>, then use <b>Set fault manually</b>.</li>`};
 function renderImportHelp(){
   $('#import-help').innerHTML=HELP[vendor];
-  $('#import-intro').innerHTML=`Run <code>${V().statusCmd}</code> on your switch and paste the output below. Cisco, Dell N-Series and Dell OS10 output are all recognized automatically. Switch Doctor maps each port's status, duplex and speed to a likely fault.`;
+  $('#import-intro').innerHTML=`Run <code>${V().statusCmd}</code> on your switch and paste the output below. Cisco, Aruba CX, Juniper, Dell N-Series and Dell OS10 output are all recognized automatically. Switch Doctor maps each port's status, duplex and speed to a likely fault.`;
 }
 function detectVendor(h){
+  if(/^\s*Interface\s+Admin\s+Link/i.test(h))return'junos';
+  if(/\bNative\b/i.test(h)&&/\bReason\b/i.test(h))return'aruba';
   if(/\bNeg\b/i.test(h)&&/\bLink\b/i.test(h))return'dn6';
   if(/Tagged-Vlans/i.test(h)||(/Description/i.test(h)&&/\bStatus\b/i.test(h)&&!/\bType\b/i.test(h)))return'os10';
   if(/\bStatus\b/i.test(h))return'cisco';
@@ -753,15 +922,16 @@ function detectVendor(h){
 }
 function parseCLI(txt){
   const lines=txt.split(/\r?\n/).filter(l=>l.trim());
-  const hi=lines.findIndex(l=>/^\s*Port\s+/i.test(l)&&/(Status|Link)/i.test(l));
+  const hi=lines.findIndex(l=>/^\s*(Port|Interface)\s+/i.test(l)&&/(Status|Link)/i.test(l));
   if(hi<0)return null;
   const fmt=detectVendor(lines[hi]);if(!fmt)return null;
   const CIS=['connected','notconnect','err-disabled','disabled','inactive','monitoring','sfpAbsent','xcvrAbsent','noOperMem','suspended'];
   const out=[];let idx=0;
   for(const l of lines.slice(hi+1)){
     if(/^[\s-]+$/.test(l))continue;
-    const m=l.match(/^\s*([A-Za-z][A-Za-z-]*\s?\d+(?:\/\d+)+(?::\d+)?)\s*(.*)$/);
-    if(!m)continue;
+    const m=l.match(/^\s*((?:[A-Za-z][A-Za-z-]*\s?)?\d+(?:\/\d+)+(?::\d+)?)(\S*)\s*(.*)$/);
+    if(!m||m[2])continue; // skip logical units like ge-0/0/0.0
+    m[2]=m[3];
     let name=m[1].trim();const t=m[2].split(/\s+/).filter(Boolean);
     let desc='',vlan='',duplex='',speed='',fault='ok',sfp=false,i;
     if(fmt==='cisco'){
@@ -774,6 +944,22 @@ function parseCLI(txt){
       else if(status==='err-disabled')fault='errdisable';
       else if(status==='disabled')fault='admindown';
       else if(status==='inactive')fault='vlan';
+    }else if(fmt==='aruba'){
+      if(t.length<5)continue;
+      const [nat,mode,type,enabled,status]=t;let j=t.findIndex((x,k)=>k>4&&/^(\d+|--)$/.test(x));if(j<0)j=t.length;
+      const reason=t.slice(5,j).join(' ');speed=t[j]||'';desc=t.slice(j+1).join(' ').replace(/^-+$/,'');vlan=nat;
+      sfp=/SFP|QSFP|DA\d/i.test(type);
+      if(/^no$/i.test(enabled)||/admin/i.test(reason))fault='admindown';
+      else if(/^up$/i.test(status)){if(/^(10|100)$/.test(speed)&&!sfp)fault='speed'}
+      else if(!reason||/waiting for link/i.test(reason))fault=desc?'notconnect':'unused';
+      else fault='errdisable';
+    }else if(fmt==='junos'){
+      if(!/^(ge|xe|mge|et)-/i.test(name)||t.length<2)continue;
+      const [admin,link,...rest]=t;desc=/Description/i.test(lines[hi])?rest.join(' '):'';
+      sfp=/^(xe|et)-/i.test(name);
+      if(/^down$/i.test(admin))fault='admindown';
+      else if(/^up$/i.test(link))fault='ok';
+      else fault=desc?'notconnect':'unused';
     }else if(fmt==='dn6'){
       i=t.findIndex((x,k)=>/^(full|half|n\/a|auto)$/i.test(x)&&/^(\d+|unknown|auto)$/i.test(t[k+1]||'')&&/^(auto|off|on)$/i.test(t[k+2]||''));if(i<0)continue;
       const [dx,sp,neg,link,flow,mode,vl]=t.slice(i);desc=t.slice(0,i).join(' ');duplex=dx;speed=sp;vlan=vl||'';
