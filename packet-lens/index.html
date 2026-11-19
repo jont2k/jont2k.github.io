@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packet Lens</title>
+<meta name="description" content="Open a pcap or pcapng capture and analyze it in your browser: packet list, display filters, protocol tree, hex view, TCP streams and statistics.">
+<link rel="icon" href="../packet-lens.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: bench-instrument analyzer. Filter bar on top, packet list, then layer tree beside the byte view. */
+  --bg:#edf0f3; --surface:#ffffff; --ink:#17212c; --muted:#5a6877; --line:#d5dce4; --accent:#0a63b8; --accent-ink:#ffffff;
+  --hl:#ffd970; --hl-ink:#1a1400; --soft:#f5f7f9;
+  --ok:#1d7a4c; --warn:#9a6100; --crit:#b42318;
+  --t-tcp:#efeafc; --t-udp:#e3effc; --t-dns:#dcf2ec; --t-http:#e4f5d8; --t-tls:#f4eaf8; --t-icmp:#fce8ec; --t-arp:#fbf2d2; --t-syn:#e6e9ed; --t-bad:#fadcd9; --t-bad-ink:#7c1810; --t-other:#ffffff;
+  --font-ui:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1217; --surface:#141a21; --ink:#dde5ed; --muted:#8a97a6; --line:#26303b; --accent:#4c9bff; --accent-ink:#04111f;
+    --hl:#7a5f0e; --hl-ink:#fff6d6; --soft:#10161c;
+    --ok:#5cc98f; --warn:#e3ae4f; --crit:#ff8a7a;
+    --t-tcp:#1f1b30; --t-udp:#152433; --t-dns:#132c27; --t-http:#1a2b15; --t-tls:#291c2e; --t-icmp:#301a20; --t-arp:#2c2712; --t-syn:#1b2027; --t-bad:#3a1714; --t-bad-ink:#ffb3a8; --t-other:#141a21;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1217; --surface:#141a21; --ink:#dde5ed; --muted:#8a97a6; --line:#26303b; --accent:#4c9bff; --accent-ink:#04111f;
+  --hl:#7a5f0e; --hl-ink:#fff6d6; --soft:#10161c;
+  --ok:#5cc98f; --warn:#e3ae4f; --crit:#ff8a7a;
+  --t-tcp:#1f1b30; --t-udp:#152433; --t-dns:#132c27; --t-http:#1a2b15; --t-tls:#291c2e; --t-icmp:#301a20; --t-arp:#2c2712; --t-syn:#1b2027; --t-bad:#3a1714; --t-bad-ink:#ffb3a8; --t-other:#141a21;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--font-ui);display:flex;flex-direction:column;overflow:hidden}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:6px 12px;white-space:nowrap}
+button:hover{border-color:var(--muted)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+button:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 8px}
+.mono{font-family:var(--font-mono)}
+.muted{color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* top bar */
+.top{display:flex;align-items:center;gap:16px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;letter-spacing:.01em}
+.brand svg{color:var(--accent)}
+.fileinfo{display:flex;align-items:baseline;gap:10px;min-width:0;flex:1}
+.fileinfo #fileName{font-family:var(--font-mono);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:11px;padding:1px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* filter bar */
+.filterbar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.fwrap{flex:1 1 380px;display:flex;align-items:center;border:1px solid var(--line);border-radius:6px;background:var(--soft);min-width:0}
+.fwrap.ok{border-color:var(--ok)}
+.fwrap.bad{border-color:var(--crit)}
+.fwrap .tag{font-size:12px;color:var(--muted);padding:0 4px 0 10px;user-select:none}
+#filter{flex:1;border:0;background:transparent;padding:7px 6px;font-family:var(--font-mono);font-size:13px;min-width:0;outline:none}
+#fclear{border:0;background:transparent;padding:4px 10px;color:var(--muted);font-size:16px;line-height:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-family:var(--font-mono);font-size:12px;padding:3px 9px;border-radius:99px;background:var(--soft)}
+#fmsg{font-size:12px;color:var(--muted);flex-basis:100%;min-height:0}
+#fmsg.err{color:var(--crit)}
+#fmsg:empty{display:none}
+
+/* tabs */
+.tabs{display:flex;align-items:center;gap:4px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.tabs .tab{border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;padding:9px 12px;color:var(--muted);font-weight:500}
+.tabs .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .spacer{flex:1}
+.tabs .tools{display:flex;gap:8px;align-items:center;padding:5px 0}
+.tabs label{font-size:12px;color:var(--muted)}
+
+main{flex:1;min-height:0;display:flex;flex-direction:column}
+.view{flex:1;min-height:0}
+.view[hidden],#packetsView[hidden]{display:none}
+
+/* packets view */
+#packetsView{display:grid;grid-template-rows:var(--split,1fr) 6px minmax(160px,1fr);padding:10px 16px 0;gap:0}
+.pane{background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.cols{--cols:64px 112px minmax(110px,1.1fr) minmax(110px,1.1fr) 76px 64px minmax(160px,3fr)}
+.lhead,.row{display:grid;grid-template-columns:var(--cols);align-items:center;font-size:12.5px}
+.lhead{font-weight:600;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);background:var(--soft);overflow:hidden;scrollbar-gutter:stable}
+.lhead span{padding:6px 8px;white-space:nowrap}
+#list{position:relative;overflow:auto;flex:1;min-height:0;scrollbar-gutter:stable;outline:none}
+#list:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+#rows{position:absolute;inset:0 0 auto 0}
+.row{position:absolute;left:0;right:0;height:24px;font-family:var(--font-mono);font-size:12px;cursor:default;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent);font-variant-numeric:tabular-nums}
+.row span{padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-no,.c-len{text-align:right}
+.r-tcp{background:var(--t-tcp)}.r-udp{background:var(--t-udp)}.r-dns{background:var(--t-dns)}.r-http{background:var(--t-http)}.r-tls{background:var(--t-tls)}
+.r-icmp{background:var(--t-icmp)}.r-arp{background:var(--t-arp)}.r-syn{background:var(--t-syn)}.r-bad{background:var(--t-bad);color:var(--t-bad-ink)}.r-other{background:var(--t-other)}
+.row:hover{filter:brightness(.97)}
+.row.sel{background:var(--accent);color:var(--accent-ink);filter:none}
+.nomatch{padding:24px;color:var(--muted);font-family:var(--font-ui)}
+.split{cursor:row-resize;display:flex;align-items:center;justify-content:center}
+.split::before{content:"";width:44px;height:3px;border-radius:2px;background:var(--line)}
+.split:hover::before{background:var(--muted)}
+.lower{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px;min-height:0;padding-bottom:10px}
+.panehead{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--soft);font-size:12px;font-weight:600;color:var(--muted);min-height:35px}
+.panehead .grow{flex:1;min-width:0;font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.panehead button{padding:2px 10px;font-size:12px;font-weight:500}
+#tree{overflow:auto;flex:1;font-family:var(--font-mono);font-size:12px;padding:4px 0}
+.tl{display:flex;align-items:flex-start;gap:4px;padding:1px 8px 1px calc(var(--d)*16px + 6px);cursor:default;border-radius:3px}
+.tl:hover{background:var(--soft)}
+.tl.sel{background:var(--hl);color:var(--hl-ink)}
+.car,.car-sp{flex:0 0 14px;height:18px;display:inline-flex;align-items:center;justify-content:center}
+.car::before{content:"";border:4px solid transparent;border-left:5px solid var(--muted);margin-left:3px;transition:transform .12s}
+.tn.open>.tl>.car::before{transform:rotate(90deg);margin-left:0;margin-top:3px}
+.tn:not(.open)>.tk{display:none}
+.tt{white-space:pre-wrap;word-break:break-word}
+.tn[data-depth="0"]>.tl{font-weight:500}
+#hexdump{overflow:auto;flex:1;font-family:var(--font-mono);font-size:12px;padding:6px 10px;line-height:1.6}
+.hr{display:flex;gap:14px;white-space:pre}
+.ho{color:var(--muted);user-select:none}
+.hx .b{display:inline-block;width:2.4ch;text-align:left;cursor:pointer}
+.hx .gap{display:inline-block;width:1ch}
+.ha .a{cursor:pointer}
+.b.hl,.a.hl{background:var(--hl);color:var(--hl-ink)}
+.hnote{color:var(--muted);padding-top:6px;font-family:var(--font-ui)}
+.empty{color:var(--muted);padding:16px;font-family:var(--font-ui)}
+
+/* stats */
+#statsView{overflow:auto;padding:14px 16px 24px}
+.stats-note{color:var(--muted);font-size:13px;margin:0 0 12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.tile .k{font-size:12px;color:var(--muted)}
+.tile .v{font-family:var(--font-mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.card.wide{grid-column:1/-1}
+.card h3{margin:0 0 8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;text-wrap:balance}
+.card h3 .grow{flex:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:3px 10px;font-size:12px;background:transparent}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.chartwrap{position:relative}
+#chart{width:100%;height:220px;display:block}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);font-size:12px;padding:4px 8px;border-radius:4px;font-family:var(--font-mono);white-space:nowrap;transform:translate(-50%,-110%)}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+.t th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:4px 8px;border-bottom:1px solid color-mix(in srgb,var(--line) 60%,transparent);font-family:var(--font-mono);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+.t td.num,.t th.num{text-align:right}
+.t tr.click{cursor:pointer}
+.t tr.click:hover td{background:var(--soft)}
+.tscroll{overflow-x:auto}
+.bar{height:6px;border-radius:3px;background:var(--accent);opacity:.8;min-width:2px}
+.barcell{width:30%}
+.exp{display:flex;flex-direction:column;gap:6px}
+.exp button{display:flex;align-items:center;gap:10px;text-align:left;width:100%;padding:7px 10px}
+.exp .lbl{flex:1}
+.exp .cnt{font-family:var(--font-mono)}
+.sev{font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;border:1px solid currentColor;min-width:64px;text-align:center}
+.sev.crit{color:var(--crit)}.sev.warn{color:var(--warn)}.sev.note{color:var(--muted)}.sev.ok{color:var(--ok)}
+
+/* status */
+.status{display:flex;gap:18px;padding:5px 16px;font-size:12px;color:var(--muted);background:var(--surface);border-top:1px solid var(--line);flex-wrap:wrap;font-variant-numeric:tabular-nums}
+
+/* overlays */
+.drop{position:fixed;inset:0;background:color-mix(in srgb,var(--accent) 18%,transparent);display:flex;align-items:center;justify-content:center;z-index:50;pointer-events:none}
+.drop[hidden]{display:none}
+.drop div{background:var(--surface);border:2px dashed var(--accent);border-radius:12px;padding:28px 40px;font-size:16px;font-weight:500}
+.modal{position:fixed;inset:0;background:rgba(5,10,15,.5);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+.modal[hidden]{display:none}
+.mbox{background:var(--surface);border:1px solid var(--line);border-radius:10px;width:min(880px,100%);max-height:calc(100% - 32px);display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.mhead{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.mhead h2{font-size:15px;margin:0;flex:1}
+.mhead .x{border:0;font-size:18px;padding:2px 8px;background:transparent}
+.mbody{padding:14px 16px;overflow:auto;flex:1}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+pre.stream{font-family:var(--font-mono);font-size:12px;white-space:pre-wrap;word-break:break-all;margin:0;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:10px;max-height:55vh;overflow:auto}
+.d0{color:var(--accent)}
+.d1{color:var(--crit)}
+.legend{display:flex;gap:16px;font-size:12px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+textarea{width:100%;min-height:180px;font-family:var(--font-mono);font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:8px}
+.help h4{margin:14px 0 6px;font-size:13px}
+.help p{margin:0 0 8px;max-width:70ch}
+.help code{font-family:var(--font-mono);font-size:12px;background:var(--soft);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.help .ex{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 16px;font-size:13px}
+.fields{columns:3 200px;font-family:var(--font-mono);font-size:12px;column-gap:16px}
+.fields div{break-inside:avoid;padding:1px 0}
+.swatches{display:flex;flex-wrap:wrap;gap:6px}
+.swatches span{font-family:var(--font-mono);font-size:12px;padding:2px 8px;border-radius:4px;border:1px solid var(--line)}
+.toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:9px 16px;border-radius:8px;font-size:13px;z-index:70;max-width:min(560px,90vw)}
+.toast[hidden]{display:none}
+.busy{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 70%,transparent);z-index:55}
+.busy[hidden]{display:none}
+.busy div{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 22px;min-width:280px}
+.prog{height:4px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);width:0}
+
+@media (max-width: 820px){
+  .cols{--cols:52px minmax(90px,1fr) minmax(90px,1fr) 62px minmax(120px,2fr)}
+  .c-time,.c-len{display:none}
+  .lower{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+  #packetsView{grid-template-rows:var(--split,42%) 6px minmax(260px,1fr)}
+  .grid{grid-template-columns:1fr}
+  .fileinfo{flex-basis:100%;order:3}
+}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="2"/><path d="M15 15l5.5 5.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M6.5 10h1.6l1-2.2 1.8 4.4 1-2.2h1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Packet Lens
+  </div>
+  <div class="fileinfo"><span id="fileName">No capture</span><span id="fileTag" class="pill" hidden>Example data</span><span id="fileMeta" class="muted"></span></div>
+  <div class="actions">
+    <button id="openBtn" class="primary">Open capture…</button>
+    <button id="pasteBtn">Paste hex</button>
+    <button id="sampleBtn">Load sample</button>
+    <input id="fileInput" type="file" accept=".pcap,.pcapng,.cap,.dmp,.gz,application/vnd.tcpdump.pcap" hidden>
+  </div>
+</header>
+
+<div class="filterbar">
+  <label for="filter" class="sr">Display filter</label>
+  <div class="fwrap" id="fwrap"><span class="tag">Filter</span><input id="filter" spellcheck="false" autocomplete="off" placeholder="tcp.port == 443 && ip.addr == 10.0.0.0/8"><button id="fclear" aria-label="Clear filter" title="Clear filter">×</button></div>
+  <button id="fapply" class="primary">Apply</button>
+  <button id="fhelp">Filter syntax</button>
+  <div class="chips" id="chips"></div>
+  <div id="fmsg" role="status"></div>
+</div>
+
+<nav class="tabs" aria-label="Views">
+  <button class="tab" data-tab="packets" aria-selected="true">Packets</button>
+  <button class="tab" data-tab="stats" aria-selected="false">Statistics</button>
+  <span class="spacer"></span>
+  <div class="tools">
+    <label for="timeFmt">Time</label>
+    <select id="timeFmt">
+      <option value="rel">Seconds since start</option>
+      <option value="delta">Seconds since previous shown</option>
+      <option value="abs">Time of day (UTC)</option>
+    </select>
+    <button id="copyCsv">Copy as CSV</button>
+  </div>
+</nav>
+
+<main>
+  <section id="packetsView" class="view">
+    <div class="pane cols">
+      <div class="lhead" role="row"><span class="c-no" style="text-align:right">No.</span><span class="c-time">Time</span><span>Source</span><span>Destination</span><span>Protocol</span><span class="c-len" style="text-align:right">Length</span><span>Info</span></div>
+      <div id="list" tabindex="0" role="grid" aria-label="Packet list"><div id="spacer"></div><div id="rows"></div></div>
+    </div>
+    <div class="split" id="split" role="separator" aria-orientation="horizontal" aria-label="Resize packet list" tabindex="0"></div>
+    <div class="lower">
+      <div class="pane">
+        <div class="panehead">Packet details <span class="grow" id="detailTitle"></span><button id="followBtn" disabled>Follow stream</button></div>
+        <div id="tree"></div>
+      </div>
+      <div class="pane">
+        <div class="panehead">Bytes <span class="grow" id="hexSel"></span></div>
+        <div id="hexdump"></div>
+      </div>
+    </div>
+  </section>
+  <section id="statsView" class="view" hidden></section>
+</main>
+
+<footer class="status" id="status"></footer>
+
+<div class="drop" id="drop" hidden><div>Drop a .pcap or .pcapng file to analyze it</div></div>
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="busy" id="busy" hidden><div><div id="busyText">Decoding…</div><div class="prog"><i id="busyBar"></i></div></div></div>
+
+<script id="core">
+'use strict';
+/* ================= byte helpers ================= */
+class Malformed extends Error{}
+const hex2=n=>n.toString(16).padStart(2,'0');
+const hex4=n=>n.toString(16).padStart(4,'0');
+const hex8=n=>(n>>>0).toString(16).padStart(8,'0');
+function need(d,o,n){ if(o<0||o+n>d.length) throw new Malformed('truncated'); }
+const U8=(d,o)=>{need(d,o,1);return d[o]};
+const U16=(d,o)=>{need(d,o,2);return (d[o]<<8)|d[o+1]};
+const U32=(d,o)=>{need(d,o,4);return ((d[o]<<24)|(d[o+1]<<16)|(d[o+2]<<8)|d[o+3])>>>0};
+const mac=(d,o)=>{need(d,o,6);return Array.from(d.subarray(o,o+6),hex2).join(':')};
+const ip4=(d,o)=>{need(d,o,4);return d[o]+'.'+d[o+1]+'.'+d[o+2]+'.'+d[o+3]};
+function ip6(d,o){ need(d,o,16); const g=[]; for(let i=0;i<8;i++) g.push(((d[o+2*i]<<8)|d[o+2*i+1]).toString(16));
+  let bs=-1,bl=0; for(let i=0;i<8;){ if(g[i]==='0'){ let j=i; while(j<8&&g[j]==='0') j++; if(j-i>bl&&j-i>1){bs=i;bl=j-i} i=j } else i++ }
+  if(bs<0) return g.join(':'); return g.slice(0,bs).join(':')+'::'+g.slice(bs+bl).join(':'); }
+function latin1(d,o,e){ e=Math.min(e,d.length); let s=''; for(let i=o;i<e;i++) s+=String.fromCharCode(d[i]); return s; }
+function hexStr(d,o,n){ need(d,o,n); return Array.from(d.subarray(o,o+n),hex2).join(''); }
+function fmtUTC(ts){ const ms=Math.floor(ts*1000); const iso=new Date(ms).toISOString(); let us=Math.round((ts-Math.floor(ts))*1e6); if(us>999999) us=999999; return iso.slice(0,10)+' '+iso.slice(11,19)+'.'+String(us).padStart(6,'0'); }
+
+/* ================= tree ================= */
+class TNode{ constructor(label,off,len){ this.label=label; this.off=off; this.len=len; this.kids=[]; } add(label,off,len){ const n=new TNode(label,off,len); this.kids.push(n); return n; } }
+const NOOP={add(){return NOOP}, kids:[]};
+
+/* ================= name tables ================= */
+const ET={0x0800:'IPv4',0x86dd:'IPv6',0x0806:'ARP',0x8100:'802.1Q VLAN',0x88a8:'802.1ad',0x88cc:'LLDP',0x888e:'EAPOL',0x8847:'MPLS',0x8863:'PPPoE Discovery',0x8864:'PPPoE Session',0x88e5:'MACsec',0x893a:'IEEE 1905'};
+const etName=t=>ET[t]||'Unknown';
+const IPP={1:'ICMP',2:'IGMP',4:'IPIP',6:'TCP',17:'UDP',41:'IPv6',47:'GRE',50:'ESP',51:'AH',58:'ICMPv6',89:'OSPF',103:'PIM',112:'VRRP',132:'SCTP'};
+const EXT6={0:'Hop-by-hop options',43:'Routing',60:'Destination options'};
+const LINKS={0:'Null/Loopback',1:'Ethernet',12:'Raw IP',14:'Raw IP',101:'Raw IP',108:'OpenBSD loopback',113:'Linux cooked (SLL)',228:'Raw IPv4',229:'Raw IPv6',276:'Linux cooked v2 (SLL2)'};
+const linkName=l=>LINKS[l]||('DLT '+l);
+const SLLPT={0:'Unicast to us',1:'Broadcast',2:'Multicast',3:'Unicast to another host',4:'Sent by us'};
+const RRT={1:'A',2:'NS',5:'CNAME',6:'SOA',12:'PTR',13:'HINFO',15:'MX',16:'TXT',28:'AAAA',33:'SRV',35:'NAPTR',41:'OPT',43:'DS',46:'RRSIG',47:'NSEC',48:'DNSKEY',64:'SVCB',65:'HTTPS',255:'ANY',257:'CAA'};
+const RRT_REV=Object.fromEntries(Object.entries(RRT).map(([k,v])=>[v.toLowerCase(),+k]));
+const RCODE={0:'No error',1:'Format error',2:'Server failure',3:'No such name',4:'Not implemented',5:'Refused'};
+const OPC={0:'Standard query',1:'Inverse query',2:'Server status',4:'Notify',5:'Update'};
+const ICMPT={0:'Echo (ping) reply',3:'Destination unreachable',4:'Source quench',5:'Redirect',8:'Echo (ping) request',9:'Router advertisement',10:'Router solicitation',11:'Time-to-live exceeded',12:'Parameter problem',13:'Timestamp request',14:'Timestamp reply'};
+const UNR={0:'Network unreachable',1:'Host unreachable',2:'Protocol unreachable',3:'Port unreachable',4:'Fragmentation needed',9:'Network administratively prohibited',10:'Host administratively prohibited',13:'Communication administratively filtered'};
+const ICMP6T={1:'Destination Unreachable',2:'Packet Too Big',3:'Time Exceeded',4:'Parameter Problem',128:'Echo (ping) request',129:'Echo (ping) reply',130:'Multicast Listener Query',131:'Multicast Listener Report',133:'Router Solicitation',134:'Router Advertisement',135:'Neighbor Solicitation',136:'Neighbor Advertisement',137:'Redirect',143:'Multicast Listener Report v2'};
+const IGMPT={0x11:'Membership Query',0x12:'v1 Membership Report',0x16:'v2 Membership Report',0x17:'Leave Group',0x22:'v3 Membership Report'};
+const DHCPM={1:'Discover',2:'Offer',3:'Request',4:'Decline',5:'ACK',6:'NAK',7:'Release',8:'Inform'};
+const NTPM={1:'symmetric active',2:'symmetric passive',3:'client',4:'server',5:'broadcast',6:'control',7:'private'};
+const TLSCT={20:'Change Cipher Spec',21:'Alert',22:'Handshake',23:'Application Data',24:'Heartbeat'};
+const TLSV={0x0300:'SSL 3.0',0x0301:'TLS 1.0',0x0302:'TLS 1.1',0x0303:'TLS 1.2',0x0304:'TLS 1.3'};
+const HST={0:'Hello Request',1:'Client Hello',2:'Server Hello',4:'New Session Ticket',8:'Encrypted Extensions',11:'Certificate',12:'Server Key Exchange',13:'Certificate Request',14:'Server Hello Done',15:'Certificate Verify',16:'Client Key Exchange',20:'Finished'};
+const ALERT={0:'Close Notify',10:'Unexpected Message',20:'Bad Record MAC',40:'Handshake Failure',42:'Bad Certificate',45:'Certificate Expired',46:'Certificate Unknown',47:'Illegal Parameter',48:'Unknown CA',50:'Decode Error',51:'Decrypt Error',70:'Protocol Version',80:'Internal Error',90:'User Canceled',112:'Unrecognized Name',120:'No Application Protocol'};
+const CS={0x1301:'TLS_AES_128_GCM_SHA256',0x1302:'TLS_AES_256_GCM_SHA384',0x1303:'TLS_CHACHA20_POLY1305_SHA256',0xc02b:'TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256',0xc02f:'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256',0xc02c:'TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384',0xc030:'TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384',0xcca9:'TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256',0xcca8:'TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256',0xc013:'TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA',0xc014:'TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA',0x009c:'TLS_RSA_WITH_AES_128_GCM_SHA256',0x009d:'TLS_RSA_WITH_AES_256_GCM_SHA384',0x002f:'TLS_RSA_WITH_AES_128_CBC_SHA',0x0035:'TLS_RSA_WITH_AES_256_CBC_SHA',0x00ff:'TLS_EMPTY_RENEGOTIATION_INFO_SCSV'};
+const csName=c=>CS[c]||(((c&0x0f0f)===0x0a0a&&(c>>8)===(c&255))?'Reserved (GREASE)':'Unknown');
+const EXT={0:'server_name',5:'status_request',10:'supported_groups',11:'ec_point_formats',13:'signature_algorithms',16:'application_layer_protocol_negotiation',18:'signed_certificate_timestamp',21:'padding',23:'extended_master_secret',27:'compress_certificate',35:'session_ticket',41:'pre_shared_key',43:'supported_versions',45:'psk_key_exchange_modes',51:'key_share',17513:'application_settings',65037:'encrypted_client_hello',65281:'renegotiation_info'};
+const GROUPS={0x1d:'x25519',0x17:'secp256r1',0x18:'secp384r1',0x19:'secp521r1',0x11ec:'X25519MLKEM768',0x100:'ffdhe2048',0x101:'ffdhe3072'};
+const TF=[[2,'SYN'],[1,'FIN'],[4,'RST'],[8,'PSH'],[16,'ACK'],[32,'URG'],[64,'ECE'],[128,'CWR'],[256,'AE']];
+const TF_BITS=TF.slice().sort((a,b)=>b[0]-a[0]);
+const flagStr=fl=>TF.filter(([b])=>fl&b).map(x=>x[1]).join(', ')||'<None>';
+
+/* ================= decoder ================= */
+let CUR=null, T0=0;
+function decode(p,withTree){
+  CUR=p; const d=p.data; const T=withTree?new TNode('',0,d.length):NOOP;
+  const s={proto:'Frame',src:'',dst:'',info:'',layers:['frame'],f:{}};
+  const fr=T.add(`Frame ${p.no}: ${p.len} bytes on wire, ${p.caplen} bytes captured`,0,d.length);
+  if(withTree){
+    fr.add(`Arrival time: ${fmtUTC(p.ts)} UTC`); fr.add(`Time since capture start: ${(p.ts-T0).toFixed(6)} s`);
+    fr.add(`Frame length: ${p.len} bytes`); fr.add(`Capture length: ${p.caplen} bytes`); fr.add(`Link type: ${linkName(p.link)} (${p.link})`);
+    if(p.iface!=null) fr.add(`Interface ID: ${p.iface}`);
+  }
+  s.f['frame.number']=p.no; s.f['frame.len']=p.len; s.f['frame.cap_len']=p.caplen;
+  try{ decodeLink(d,p.link,s,T); }
+  catch(e){
+    if(!(e instanceof Malformed)&&!(e instanceof RangeError)) throw e;
+    if(p.caplen<p.len){ s.info=(s.info?s.info+' ':'')+'[Packet size limited during capture]'; T.add('[Packet size limited during capture]'); }
+    else { s.malformed=1; s.f.malformed=1; s.info=(s.info?s.info+' ':'')+'[Malformed Packet]'; T.add('[Malformed Packet: the data ends before this layer does]'); }
+  }
+  s.layerSet=new Set(s.layers);
+  return {s,T};
+}
+function decodeLink(d,lt,s,T){
+  switch(lt){
+    case 1: return eth(d,0,s,T);
+    case 0: case 108: { need(d,0,4); const fam=lt===108?U32(d,0):(d[0]||d[3]); T.add(`Null/Loopback, Family: ${fam}`,0,4); s.layers.push('null');
+      if(fam===2) return ipv4(d,4,s,T); if(fam===24||fam===28||fam===30) return ipv6(d,4,s,T); s.proto='Loopback'; s.info=`Address family ${fam}`; return; }
+    case 12: case 14: case 101: case 228: case 229: { const v=U8(d,0)>>4; if(v===4) return ipv4(d,0,s,T); if(v===6) return ipv6(d,0,s,T); s.proto='Raw'; s.info='Unknown IP version '+v; return; }
+    case 113: { need(d,0,16); const pt=U16(d,0), al=U16(d,4), pr=U16(d,14); const addr=al===6?mac(d,6):'';
+      const n=T.add(`Linux cooked capture v1${addr?', Src: '+addr:''}`,0,16); n.add(`Packet type: ${SLLPT[pt]||pt}`,0,2);
+      if(addr){ n.add(`Source: ${addr}`,6,6); s.src=addr; s.f['eth.src']=addr; } n.add(`Protocol: ${etName(pr)} (0x${hex4(pr)})`,14,2); s.layers.push('sll'); return l3(d,16,pr,s,T); }
+    case 276: { need(d,0,20); const pr=U16(d,0), ifx=U32(d,4), pt=d[10], al=d[11]; const addr=al===6?mac(d,12):'';
+      const n=T.add('Linux cooked capture v2',0,20); n.add(`Protocol: ${etName(pr)} (0x${hex4(pr)})`,0,2); n.add(`Interface index: ${ifx}`,4,4); n.add(`Packet type: ${SLLPT[pt]||pt}`,10,1);
+      if(addr){ n.add(`Source: ${addr}`,12,6); s.src=addr; s.f['eth.src']=addr; } s.layers.push('sll'); return l3(d,20,pr,s,T); }
+    default: s.proto='DLT '+lt; s.info=`Link-layer type ${lt} isn't supported by this decoder`; T.add(`Data (${d.length} bytes)`,0,d.length);
+  }
+}
+function eth(d,o,s,T){
+  need(d,o,14); const dst=mac(d,o), src=mac(d,o+6); let type=U16(d,o+12);
+  const n=T.add(`Ethernet II, Src: ${src}, Dst: ${dst}`,o,14);
+  n.add(`Destination: ${dst}${dst==='ff:ff:ff:ff:ff:ff'?' (broadcast)':(d[o]&1)?' (multicast)':''}`,o,6); n.add(`Source: ${src}`,o+6,6);
+  s.layers.push('eth'); s.src=src; s.dst=dst; s.proto='Ethernet'; Object.assign(s.f,{'eth.src':src,'eth.dst':dst,'eth.addr':[src,dst]});
+  if(type<=1500){ n.add(`Length: ${type}`,o+12,2); s.proto='LLC'; s.info=`IEEE 802.3 frame, ${type} bytes of LLC data`; T.add(`Logical-Link Control (${type} bytes)`,o+14,Math.min(type,d.length-o-14)); return; }
+  n.add(`Type: ${etName(type)} (0x${hex4(type)})`,o+12,2); s.f['eth.type']=type; o+=14;
+  while(type===0x8100||type===0x88a8){ need(d,o,4); const tci=U16(d,o); type=U16(d,o+2);
+    const v=T.add(`802.1Q Virtual LAN, PRI: ${tci>>13}, ID: ${tci&0xfff}`,o,4); v.add(`Priority: ${tci>>13}`,o,2); v.add(`ID: ${tci&0xfff}`,o,2); v.add(`Type: ${etName(type)} (0x${hex4(type)})`,o+2,2);
+    s.layers.push('vlan'); s.f['vlan.id']=tci&0xfff; o+=4; }
+  return l3(d,o,type,s,T);
+}
+function l3(d,o,type,s,T){
+  if(type===0x0800) return ipv4(d,o,s,T);
+  if(type===0x86dd) return ipv6(d,o,s,T);
+  if(type===0x0806) return arp(d,o,s,T);
+  s.proto=ET[type]||('0x'+hex4(type)); s.info=`Ethertype 0x${hex4(type)} (${ET[type]||'unknown'}), ${Math.max(0,d.length-o)} bytes`;
+  if(type===0x88cc) s.layers.push('lldp');
+  T.add(`${ET[type]||'Unknown'} payload (${Math.max(0,d.length-o)} bytes)`,o,Math.max(0,d.length-o));
+}
+function arp(d,o,s,T){
+  need(d,o,8); const ht=U16(d,o),pt=U16(d,o+2),hl=d[o+4],pl=d[o+5],op=U16(d,o+6);
+  s.layers.push('arp'); s.proto='ARP'; s.f['arp.opcode']=op;
+  const n=T.add(`Address Resolution Protocol (${op===1?'request':op===2?'reply':'opcode '+op})`,o,8+2*hl+2*pl);
+  n.add(`Hardware type: ${ht===1?'Ethernet':ht} (${ht})`,o,2); n.add(`Protocol type: ${etName(pt)} (0x${hex4(pt)})`,o+2,2); n.add(`Hardware size: ${hl}`,o+4,1); n.add(`Protocol size: ${pl}`,o+5,1); n.add(`Opcode: ${op===1?'request':op===2?'reply':op} (${op})`,o+6,2);
+  if(hl===6&&pl===4){
+    const sm=mac(d,o+8), si=ip4(d,o+14), tm=mac(d,o+18), ti=ip4(d,o+24);
+    n.add(`Sender MAC address: ${sm}`,o+8,6); n.add(`Sender IP address: ${si}`,o+14,4); n.add(`Target MAC address: ${tm}`,o+18,6); n.add(`Target IP address: ${ti}`,o+24,4);
+    Object.assign(s.f,{'arp.src.hw_mac':sm,'arp.src.proto_ipv4':si,'arp.dst.hw_mac':tm,'arp.dst.proto_ipv4':ti});
+    if(op===1) s.info= si===ti?`ARP Announcement for ${si}`: si==='0.0.0.0'?`Who has ${ti}? (ARP Probe)`:`Who has ${ti}? Tell ${si}`;
+    else if(op===2) s.info= si===ti?`Gratuitous ARP for ${si} (Reply)`:`${si} is at ${sm}`;
+    else s.info=`ARP opcode ${op}`;
+  } else s.info=`ARP opcode ${op}`;
+}
+function ipv4(d,o,s,T){
+  need(d,o,20); const vihl=d[o], ihl=(vihl&15)*4; if((vihl>>4)!==4||ihl<20) throw new Malformed('bad ip header'); need(d,o,ihl);
+  const tos=d[o+1], tot=U16(d,o+2), id=U16(d,o+4), ff=U16(d,o+6), ttl=d[o+8], pr=d[o+9], ck=U16(d,o+10), src=ip4(d,o+12), dst=ip4(d,o+16);
+  const n=T.add(`Internet Protocol Version 4, Src: ${src}, Dst: ${dst}`,o,ihl);
+  n.add('Version: 4',o,1); n.add(`Header length: ${ihl} bytes`,o,1); n.add(`Differentiated services: DSCP ${tos>>2}, ECN ${tos&3}`,o+1,1); n.add(`Total length: ${tot}`,o+2,2); n.add(`Identification: 0x${hex4(id)} (${id})`,o+4,2);
+  const fl=n.add(`Flags: 0x${hex2(ff>>13)}${ff&0x4000?", Don't fragment":''}${ff&0x2000?', More fragments':''}`,o+6,1);
+  fl.add(`Reserved bit: ${ff>>15&1?'Set':'Not set'}`,o+6,1); fl.add(`Don't fragment: ${ff>>14&1?'Set':'Not set'}`,o+6,1); fl.add(`More fragments: ${ff>>13&1?'Set':'Not set'}`,o+6,1);
+  n.add(`Fragment offset: ${(ff&0x1fff)*8}`,o+6,2); n.add(`Time to live: ${ttl}`,o+8,1); n.add(`Protocol: ${IPP[pr]||'Unknown'} (${pr})`,o+9,1); n.add(`Header checksum: 0x${hex4(ck)}`,o+10,2);
+  n.add(`Source address: ${src}`,o+12,4); n.add(`Destination address: ${dst}`,o+16,4); if(ihl>20) n.add(`Options (${ihl-20} bytes)`,o+20,ihl-20);
+  s.layers.push('ip'); s.src=src; s.dst=dst;
+  Object.assign(s.f,{'ip.src':src,'ip.dst':dst,'ip.addr':[src,dst],'ip.ttl':ttl,'ip.proto':pr,'ip.id':id,'ip.len':tot,'ip.flags.df':ff>>14&1,'ip.flags.mf':ff>>13&1,host:[src,dst]});
+  s.proto='IPv4'; s.info=IPP[pr]||('IP protocol '+pr);
+  const end=tot>=ihl?Math.min(o+tot,d.length):d.length;
+  if(ff&0x3fff&~0x4000){ s.f['ip.fragment']=1; if(ff&0x1fff){ s.info=`Fragmented IP protocol (proto=${IPP[pr]||pr}, off=${(ff&0x1fff)*8}, ID=${hex4(id)})`; T.add(`IP fragment data (${end-o-ihl} bytes)`,o+ihl,end-o-ihl); return; } }
+  return l4(d,o+ihl,end,pr,s,T);
+}
+function ipv6(d,o,s,T){
+  need(d,o,40); const vtf=U32(d,o); if((vtf>>>28)!==6) throw new Malformed('bad ipv6'); const plen=U16(d,o+4); let nh=d[o+6]; const hl=d[o+7]; const src=ip6(d,o+8), dst=ip6(d,o+24);
+  const n=T.add(`Internet Protocol Version 6, Src: ${src}, Dst: ${dst}`,o,40);
+  n.add('Version: 6',o,1); n.add(`Traffic class: 0x${hex2((vtf>>>20)&255)}`,o,2); n.add(`Flow label: 0x${(vtf&0xfffff).toString(16).padStart(5,'0')}`,o+1,3); n.add(`Payload length: ${plen}`,o+4,2);
+  n.add(`Next header: ${IPP[nh]||EXT6[nh]||'Unknown'} (${nh})`,o+6,1); n.add(`Hop limit: ${hl}`,o+7,1); n.add(`Source address: ${src}`,o+8,16); n.add(`Destination address: ${dst}`,o+24,16);
+  s.layers.push('ipv6'); s.src=src; s.dst=dst;
+  Object.assign(s.f,{'ipv6.src':src,'ipv6.dst':dst,'ipv6.addr':[src,dst],'ipv6.hlim':hl,'ipv6.plen':plen,host:[src,dst]});
+  s.proto='IPv6'; s.info=IPP[nh]||('Next header '+nh);
+  const end=plen?Math.min(o+40+plen,d.length):d.length; let q=o+40;
+  for(let k=0;k<8;k++){
+    if(nh===0||nh===43||nh===60){ need(d,q,2); const l=(d[q+1]+1)*8; n.add(`${EXT6[nh]} extension header (${l} bytes)`,q,l); nh=d[q]; q+=l; }
+    else if(nh===44){ need(d,q,8); const fo=U16(d,q+2); n.add(`Fragment header, offset ${(fo>>3)*8}${fo&1?', more fragments':''}`,q,8); nh=d[q]; q+=8; s.f['ipv6.fragment']=1; if(fo>>3){ s.info=`IPv6 fragment (offset ${(fo>>3)*8})`; return; } }
+    else break;
+  }
+  s.f['ipv6.nxt']=nh;
+  return l4(d,q,end,nh,s,T);
+}
+function l4(d,o,end,pr,s,T){
+  switch(pr){
+    case 6: return tcp(d,o,end,s,T);
+    case 17: return udp(d,o,end,s,T);
+    case 1: return icmp(d,o,end,s,T);
+    case 58: return icmp6(d,o,end,s,T);
+    case 41: return ipv6(d,o,s,T);
+    case 4: return ipv4(d,o,s,T);
+    case 2: { need(d,o,1); s.layers.push('igmp'); s.proto='IGMP'; const t=d[o]; s.info=IGMPT[t]||`IGMP type 0x${hex2(t)}`; s.f['igmp.type']=t; T.add(`Internet Group Management Protocol, ${s.info}`,o,end-o); return; }
+    default: { const nm=IPP[pr]; if(nm){ s.proto=nm; s.layers.push(nm.toLowerCase()); } s.info=`${nm||'IP protocol '+pr}, ${Math.max(0,end-o)} bytes`; T.add(`${nm||'Protocol '+pr} payload (${Math.max(0,end-o)} bytes)`,o,Math.max(0,end-o)); }
+  }
+}
+function tcp(d,o,end,s,T){
+  need(d,o,20); const sp=U16(d,o),dp=U16(d,o+2),seq=U32(d,o+4),ack=U32(d,o+8),doff=(d[o+12]>>4)*4,fl=((d[o+12]&1)<<8)|d[o+13],win=U16(d,o+14),ck=U16(d,o+16),urg=U16(d,o+18);
+  if(doff<20) throw new Malformed('bad tcp offset'); need(d,o,doff);
+  const plen=Math.max(0,Math.min(end,d.length)-(o+doff));
+  const cs=CUR&&CUR.s, rel=cs&&cs.rel;
+  const n=T.add(`Transmission Control Protocol, Src Port: ${sp}, Dst Port: ${dp}, Seq: ${rel?rel.seq:seq}${(fl&16)?', Ack: '+(rel&&rel.ack!=null?rel.ack:ack):''}, Len: ${plen}`,o,doff);
+  n.add(`Source port: ${sp}`,o,2); n.add(`Destination port: ${dp}`,o+2,2);
+  if(cs&&cs.f['tcp.stream']!=null) n.add(`[Stream index: ${cs.f['tcp.stream']}]`);
+  n.add(`Sequence number: ${rel?rel.seq+' (relative), raw '+seq:seq}`,o+4,4);
+  n.add(`Acknowledgment number: ${(fl&16)?(rel&&rel.ack!=null?rel.ack+' (relative), raw '+ack:ack):'0 (ACK flag not set)'}`,o+8,4);
+  n.add(`Header length: ${doff} bytes`,o+12,1);
+  const fn=n.add(`Flags: 0x${fl.toString(16).padStart(3,'0')} (${flagStr(fl)})`,o+12,2); for(const [b,nm] of TF_BITS) fn.add(`${nm}: ${fl&b?'Set':'Not set'}`,o+12,2);
+  n.add(`Window: ${win}`,o+14,2); n.add(`Checksum: 0x${hex4(ck)} [unverified]`,o+16,2); n.add(`Urgent pointer: ${urg}`,o+18,2);
+  if(doff>20){ const on=n.add(`Options (${doff-20} bytes)`,o+20,doff-20); tcpOpts(d,o+20,o+doff,on,s); }
+  if(cs&&cs.f['tcp.analysis.retransmission']) n.add('[Analysis: this frame is a suspected retransmission]');
+  if(cs&&cs.f['tcp.analysis.zero_window']) n.add('[Analysis: zero window, the receiver has no buffer space]');
+  s.layers.push('tcp'); s.proto='TCP'; s.sport=sp; s.dport=dp;
+  Object.assign(s.f,{'tcp.srcport':sp,'tcp.dstport':dp,'tcp.port':[sp,dp],port:[sp,dp],'tcp.seq':seq,'tcp.ack':ack,'tcp.len':plen,'tcp.window_size':win,'tcp.flags':fl,
+    'tcp.flags.syn':fl>>1&1,'tcp.flags.ack':fl>>4&1,'tcp.flags.fin':fl&1,'tcp.flags.rst':fl>>2&1,'tcp.flags.psh':fl>>3&1,'tcp.flags.urg':fl>>5&1});
+  s.tcp={sp,dp,seq,ack,fl,win,plen}; s.pay=[o+doff,plen];
+  s.info=`${sp} → ${dp} [${flagStr(fl)}] Seq=${seq}${fl&16?' Ack='+ack:''} Win=${win} Len=${plen}`;
+  if(plen>0){
+    const po=o+doff, pe=po+plen;
+    if(isHttp(d,po,pe)) return http(d,po,pe,s,T);
+    if(looksTls(d,po,pe)) return tls(d,po,pe,s,T);
+    if((sp===53||dp===53)&&plen>14) return dns(d,po+2,pe,s,T,'DNS');
+    T.add(`TCP payload (${plen} bytes)`,po,plen);
+  }
+}
+function tcpOpts(d,i,e,T,s){
+  while(i<e){ const k=d[i];
+    if(k===0){ T.add('End of option list',i,1); break; }
+    if(k===1){ T.add('No-Operation (NOP)',i,1); i++; continue; }
+    if(i+1>=e) break; const l=d[i+1]; if(l<2||i+l>e){ T.add('Malformed option',i,e-i); break; }
+    if(k===2&&l===4){ const v=U16(d,i+2); T.add(`Maximum segment size: ${v} bytes`,i,l); s.f['tcp.options.mss_val']=v; }
+    else if(k===3&&l===3){ T.add(`Window scale: ${d[i+2]} (multiply by ${1<<d[i+2]})`,i,l); s.f['tcp.options.wscale']=d[i+2]; }
+    else if(k===4) T.add('SACK permitted',i,l);
+    else if(k===5){ const b=[]; for(let j=i+2;j+8<=i+l;j+=8) b.push(`${U32(d,j)}-${U32(d,j+4)}`); T.add(`SACK blocks: ${b.join(', ')}`,i,l); s.f['tcp.options.sack']=1; }
+    else if(k===8&&l===10) T.add(`Timestamps: TSval ${U32(d,i+2)}, TSecr ${U32(d,i+6)}`,i,l);
+    else T.add(`Option kind ${k} (${l} bytes)`,i,l);
+    i+=l; }
+}
+const HTTP_RE=/^(?:GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH|CONNECT|TRACE) \S+ HTTP\/[0-9.]+$|^HTTP\/[0-9.]+ \d{3}/;
+function isHttp(d,o,e){ if(e-o<12) return false; const c=d[o]; if(c<65||c>90) return false; const t=latin1(d,o,Math.min(e,o+2048)); const nl=t.indexOf('\r\n'); return HTTP_RE.test(nl>=0?t.slice(0,nl):t); }
+function looksTls(d,o,e){ return e-o>=5 && d[o]>=20 && d[o]<=24 && d[o+1]===3 && d[o+2]<=4; }
+function http(d,o,e,s,T){
+  const txt=latin1(d,o,Math.min(e,o+16384)); const he=txt.indexOf('\r\n\r\n'); const head=he>=0?txt.slice(0,he):txt; const lines=head.split('\r\n'); const first=lines[0];
+  const n=T.add('Hypertext Transfer Protocol',o,e-o); let off=o; const hdr={};
+  lines.forEach((ln,i)=>{ n.add(ln,off,Math.min(ln.length+2,e-off)); off+=ln.length+2; if(i>0){ const c=ln.indexOf(':'); if(c>0) hdr[ln.slice(0,c).trim().toLowerCase()]=ln.slice(c+1).trim(); } });
+  s.layers.push('http'); s.proto='HTTP'; let m;
+  if((m=/^([A-Z]+) (\S+) (HTTP\/[0-9.]+)/.exec(first))){ Object.assign(s.f,{'http.request':1,'http.request.method':m[1],'http.request.uri':m[2]}); s.info=first; }
+  else if((m=/^HTTP\/[0-9.]+ (\d{3})/.exec(first))){ s.f['http.response']=1; s.f['http.response.code']=+m[1]; s.info=first+(hdr['content-type']?`  (${hdr['content-type'].split(';')[0]})`:''); }
+  if(hdr.host) s.f['http.host']=hdr.host; if(hdr['user-agent']) s.f['http.user_agent']=hdr['user-agent']; if(hdr['content-type']) s.f['http.content_type']=hdr['content-type']; if(hdr.server) s.f['http.server']=hdr.server;
+  if(he>=0){ const bl=e-(o+he+4); if(bl>0) n.add(`Body: ${bl} bytes${hdr['content-type']?' ('+hdr['content-type']+')':''}`,o+he+4,bl); }
+}
+function tls(d,o,e,s,T){
+  const n=T.add('Transport Layer Security',o,e-o); s.layers.push('tls'); s.proto='TLS'; const infos=[], cts=[]; let p=o;
+  while(p+5<=e){
+    const ct=d[p], ver=U16(d,p+1), rl=U16(d,p+3);
+    if(!TLSCT[ct]||(ver>>8)!==3){ n.add(`Continuation data (${e-p} bytes)`,p,e-p); break; }
+    const full=p+5+rl, be=Math.min(full,e), partial=be<full;
+    const rn=n.add(`${TLSV[ver]||'0x'+hex4(ver)} Record Layer: ${TLSCT[ct]}${partial?' (continues in a later segment)':''}`,p,be-p);
+    rn.add(`Content type: ${TLSCT[ct]} (${ct})`,p,1); rn.add(`Version: ${TLSV[ver]||'unknown'} (0x${hex4(ver)})`,p+1,2); rn.add(`Length: ${rl}`,p+3,2);
+    cts.push(ct);
+    if(ct===22) infos.push(...tlsHs(d,p+5,be,s,rn,partial));
+    else if(ct===21){ if(rl===2&&be-p>=7){ const lv=d[p+5], ds=d[p+6]; const t=`Alert (${lv===2?'Fatal':'Warning'}, ${ALERT[ds]||ds})`; rn.add(t,p+5,2); infos.push(t); s.f['tls.alert']=ds; } else { rn.add('Encrypted alert',p+5,be-p-5); infos.push('Encrypted Alert'); } }
+    else { if(ct===23) rn.add(`Encrypted application data: ${rl} bytes`,p+5,be-p-5); infos.push(TLSCT[ct]); }
+    p=full;
+  }
+  if(!infos.length) infos.push('Continuation Data');
+  s.f['tls.record.content_type']=cts; s.info=infos.join(', ');
+}
+function tlsHs(d,o,e,s,T,partial){
+  const out=[]; let p=o; const hts=s.f['tls.handshake.type']||(s.f['tls.handshake.type']=[]);
+  while(p+4<=e){
+    const ht=d[p], hl=(d[p+1]<<16)|(d[p+2]<<8)|d[p+3];
+    if(!(ht in HST)||(!partial&&p+4+hl>e)){ T.add('Encrypted Handshake Message',p,e-p); out.push('Encrypted Handshake Message'); break; }
+    const he=Math.min(p+4+hl,e); const hn=T.add(`Handshake Protocol: ${HST[ht]}`,p,he-p); hn.add(`Handshake type: ${HST[ht]} (${ht})`,p,1); hn.add(`Length: ${hl}`,p+1,3); hts.push(ht);
+    let label=HST[ht];
+    if((ht===1||ht===2)&&he-p>=4+38){ try{ label+=tlsHello(d,p+4,he,ht,s,hn); }catch(err){ if(!(err instanceof Malformed||err instanceof RangeError)) throw err; hn.add('[Hello continues in a later segment]'); } }
+    out.push(label); p+=4+hl;
+  }
+  return out;
+}
+function tlsHello(d,o,e,ht,s,T){
+  let q=o; const ver=U16(d,q); T.add(`Version: ${TLSV[ver]||hex4(ver)} (0x${hex4(ver)})`,q,2); q+=2; T.add(`Random: ${hexStr(d,q,32)}`,q,32); q+=32;
+  const sl=U8(d,q); T.add(`Session ID length: ${sl}`,q,1); if(sl) T.add(`Session ID: ${hexStr(d,q+1,sl)}`,q+1,sl); q+=1+sl;
+  if(ht===1){ const cl=U16(d,q); const cn=T.add(`Cipher suites (${cl>>1} suites)`,q,2+cl); for(let i=0;i<cl&&i<400;i+=2){ const c=U16(d,q+2+i); cn.add(`Cipher suite: ${csName(c)} (0x${hex4(c)})`,q+2+i,2); } q+=2+cl; const ml=U8(d,q); T.add(`Compression methods length: ${ml}`,q,1); q+=1+ml; }
+  else { const c=U16(d,q); T.add(`Cipher suite: ${csName(c)} (0x${hex4(c)})`,q,2); s.f['tls.cipher']=csName(c); q+=2; T.add(`Compression method: ${U8(d,q)}`,q,1); q+=1; }
+  let extra=''; if(q+2>e) return extra;
+  const el=U16(d,q); T.add(`Extensions length: ${el}`,q,2); q+=2; const ee=Math.min(q+el,e);
+  while(q+4<=ee){
+    const et=U16(d,q), xl=U16(d,q+2); const xn=T.add(`Extension: ${EXT[et]||(((et&0x0f0f)===0x0a0a)?'Reserved (GREASE)':'unknown')} (type ${et}, len ${xl})`,q,Math.min(4+xl,ee-q)); const b=q+4;
+    if(et===0&&ht===1&&xl>=5){ const nl=U16(d,b+3); const name=latin1(d,b+5,Math.min(b+5+nl,e)); xn.add(`Server name: ${name}`,b+5,nl); s.f['tls.sni']=name; s.f['tls.handshake.extensions_server_name']=name; extra=` (SNI=${name})`; }
+    else if(et===16&&xl>=2){ const ll=U16(d,b); const ps=[]; let r=b+2; while(r<b+2+ll&&r<e){ const l=d[r]; ps.push(latin1(d,r+1,Math.min(r+1+l,e))); r+=1+l; } xn.add(`ALPN protocols: ${ps.join(', ')}`,b,xl); s.f['tls.alpn']=ps; }
+    else if(et===43&&xl>=2){ if(ht===1){ const l=U8(d,b); const vs=[]; for(let r=b+1;r+2<=b+1+l;r+=2) vs.push(TLSV[U16(d,r)]||csName(U16(d,r))); xn.add(`Supported versions: ${vs.join(', ')}`,b,xl); } else { const v=U16(d,b); xn.add(`Selected version: ${TLSV[v]||hex4(v)}`,b,2); s.f['tls.version']=TLSV[v]||hex4(v); } }
+    else if(et===10&&xl>=2){ const l=U16(d,b); const gs=[]; for(let r=b+2;r+2<=b+2+l&&r+2<=e;r+=2) gs.push(GROUPS[U16(d,r)]||'0x'+hex4(U16(d,r))); xn.add(`Groups: ${gs.join(', ')}`,b,xl); }
+    q+=4+xl;
+  }
+  return extra;
+}
+function udp(d,o,end,s,T){
+  need(d,o,8); const sp=U16(d,o),dp=U16(d,o+2),ul=U16(d,o+4),ck=U16(d,o+6);
+  const pe=Math.min(ul>=8?o+ul:end,end,d.length), po=o+8, plen=Math.max(0,pe-po);
+  const n=T.add(`User Datagram Protocol, Src Port: ${sp}, Dst Port: ${dp}`,o,8);
+  n.add(`Source port: ${sp}`,o,2); n.add(`Destination port: ${dp}`,o+2,2); n.add(`Length: ${ul}`,o+4,2); n.add(`Checksum: 0x${hex4(ck)} [unverified]`,o+6,2);
+  const cs=CUR&&CUR.s; if(cs&&cs.f['udp.stream']!=null) n.add(`[Stream index: ${cs.f['udp.stream']}]`);
+  s.layers.push('udp'); s.proto='UDP'; s.sport=sp; s.dport=dp; s.udp={sp,dp}; s.pay=[po,plen];
+  Object.assign(s.f,{'udp.srcport':sp,'udp.dstport':dp,'udp.port':[sp,dp],port:[sp,dp],'udp.length':ul});
+  s.info=`${sp} → ${dp} Len=${plen}`;
+  if(!plen) return; const has=x=>sp===x||dp===x;
+  if(has(53)) return dns(d,po,pe,s,T,'DNS');
+  if(has(5353)) return dns(d,po,pe,s,T,'MDNS');
+  if(has(5355)) return dns(d,po,pe,s,T,'LLMNR');
+  if(has(67)||has(68)) return dhcp(d,po,pe,s,T);
+  if(has(123)&&plen>=48) return ntp(d,po,pe,s,T);
+  if(has(443)){ s.layers.push('quic'); s.proto='QUIC'; const b=d[po]; s.info=(b&0x80)?`${['Initial','0-RTT','Handshake','Retry'][(b>>4)&3]}, long header${plen>=5?', version 0x'+hex8(U32(d,po+1)):''}`:'Protected payload (short header)'; T.add(`QUIC IETF: ${s.info}`,po,plen); return; }
+  if(has(1900)){ s.layers.push('ssdp'); s.proto='SSDP'; const t=latin1(d,po,Math.min(pe,po+1024)); const ls=t.split('\r\n'); s.info=ls[0]; const sn=T.add('Simple Service Discovery Protocol',po,plen); let off=po; for(const ln of ls){ if(!ln) break; sn.add(ln,off,ln.length+2); off+=ln.length+2; } return; }
+  T.add(`Data (${plen} bytes)`,po,plen);
+}
+function dname(d,base,p){
+  const labels=[]; let jumped=false, next=-1, guard=0;
+  for(;;){ if(++guard>128) throw new Malformed('name loop'); const l=U8(d,p);
+    if(l===0){ p++; break; }
+    if((l&0xc0)===0xc0){ const ptr=((l&0x3f)<<8)|U8(d,p+1); if(!jumped){ next=p+2; jumped=true; } p=base+ptr; continue; }
+    if(l&0xc0) throw new Malformed('bad label'); need(d,p+1,l); labels.push(latin1(d,p+1,p+1+l)); p+=l+1; }
+  return [labels.join('.')||'<Root>', jumped?next:p];
+}
+function rdata(d,base,o,l,t){
+  switch(t){
+    case 1: return l===4?ip4(d,o):hexStr(d,o,l);
+    case 28: return l===16?ip6(d,o):hexStr(d,o,l);
+    case 2: case 5: case 12: return dname(d,base,o)[0];
+    case 6: return dname(d,base,o)[0];
+    case 15: return `${U16(d,o)} ${dname(d,base,o+2)[0]}`;
+    case 16: { const parts=[]; let q=o; while(q<o+l){ const n=d[q]; parts.push('"'+latin1(d,q+1,Math.min(q+1+n,o+l))+'"'); q+=1+n; } return parts.join(' '); }
+    case 33: return `${dname(d,base,o+6)[0]} port ${U16(d,o+4)}`;
+    default: return `${l} bytes`;
+  }
+}
+function dns(d,o,e,s,T,label){
+  need(d,o,12); const id=U16(d,o),fl=U16(d,o+2),qd=U16(d,o+4),an=U16(d,o+6),ns=U16(d,o+8),ar=U16(d,o+10); const qr=fl>>15, op=(fl>>11)&15, rc=fl&15;
+  const full=label==='DNS'?'Domain Name System':label==='MDNS'?'Multicast Domain Name System':'Link-local Multicast Name Resolution';
+  s.layers.push(label.toLowerCase()); s.proto=label;
+  const n=T.add(`${full} (${qr?'response':'query'})`,o,e-o);
+  n.add(`Transaction ID: 0x${hex4(id)}`,o,2);
+  const fn=n.add(`Flags: 0x${hex4(fl)} ${qr?'Standard query response':'Standard query'}${qr?', '+(RCODE[rc]||'rcode '+rc):''}`,o+2,2);
+  fn.add(`Response: ${qr?'Message is a response':'Message is a query'}`,o+2,2); fn.add(`Opcode: ${OPC[op]||op} (${op})`,o+2,2);
+  if(qr) fn.add(`Authoritative: ${fl>>10&1?'Yes':'No'}`,o+2,2); fn.add(`Truncated: ${fl>>9&1?'Yes':'No'}`,o+2,2); fn.add(`Recursion desired: ${fl>>8&1?'Yes':'No'}`,o+2,2);
+  if(qr){ fn.add(`Recursion available: ${fl>>7&1?'Yes':'No'}`,o+2,2); fn.add(`Reply code: ${RCODE[rc]||rc} (${rc})`,o+2,2); }
+  n.add(`Questions: ${qd}`,o+4,2); n.add(`Answer RRs: ${an}`,o+6,2); n.add(`Authority RRs: ${ns}`,o+8,2); n.add(`Additional RRs: ${ar}`,o+10,2);
+  const F=s.f; F['dns.id']=id; F['dns.flags.response']=qr; F['dns.flags.rcode']=rc; F['dns.count.answers']=an;
+  const qn=F['dns.qry.name']=[], qt=F['dns.qry.type']=[], A=F['dns.a']=[], AAAA=F['dns.aaaa']=[], CN=F['dns.cname']=[];
+  let p=o+12; const qs=[]; const qnode=qd?n.add('Queries',p,0):null;
+  for(let i=0;i<qd&&i<64;i++){ const st=p; const [nm,np]=dname(d,o,p); const t=U16(d,np), c=U16(d,np+2); p=np+4; qs.push([nm,t]); qn.push(nm); qt.push(t); qnode.add(`${nm}: type ${RRT[t]||t}, class ${(c&0x7fff)===1?'IN':c}`,st,p-st); }
+  if(qnode) qnode.len=p-(o+12);
+  const ans=[];
+  for(const [title,cnt] of [['Answers',an],['Authoritative nameservers',ns],['Additional records',ar]]){
+    if(!cnt) continue; const sp0=p; const sn=n.add(title,p,0);
+    for(let i=0;i<cnt&&i<128;i++){ const st=p; const [nm,np]=dname(d,o,p); const t=U16(d,np), c=U16(d,np+2), ttl=U32(d,np+4), rl=U16(d,np+8); const rd=np+10; need(d,rd,rl); p=rd+rl;
+      if(t===41){ sn.add(`<Root>: type OPT, UDP payload size ${c}`,st,p-st); continue; }
+      const v=rdata(d,o,rd,rl,t); sn.add(`${nm}: type ${RRT[t]||t}, class ${(c&0x7fff)===1?'IN':c}, TTL ${ttl}, ${v}`,st,p-st);
+      if(title==='Answers') ans.push(`${RRT[t]||'TYPE'+t} ${v}`); if(t===1) A.push(v); else if(t===28) AAAA.push(v); else if(t===5) CN.push(v); }
+    sn.len=p-sp0; }
+  s.info=`${qr?'Standard query response':'Standard query'} 0x${hex4(id)}${qr&&rc?' '+(RCODE[rc]||'rcode '+rc):''} ${qs.map(([nm,t])=>`${RRT[t]||'TYPE'+t} ${nm}`).join(' ')}${ans.length?' '+ans.join(' '):''}`;
+}
+function dhcp(d,o,e,s,T){
+  need(d,o,240); const op=d[o], xid=U32(d,o+4), ci=ip4(d,o+12), yi=ip4(d,o+16), si=ip4(d,o+20), gi=ip4(d,o+24), ch=mac(d,o+28);
+  const n=T.add('Dynamic Host Configuration Protocol',o,e-o);
+  n.add(`Message type: ${op===1?'Boot Request':'Boot Reply'} (${op})`,o,1); n.add(`Transaction ID: 0x${hex8(xid)}`,o+4,4); n.add(`Client IP address: ${ci}`,o+12,4); n.add(`Your (client) IP address: ${yi}`,o+16,4); n.add(`Next server IP address: ${si}`,o+20,4); n.add(`Relay agent IP address: ${gi}`,o+24,4); n.add(`Client MAC address: ${ch}`,o+28,6);
+  s.layers.push('dhcp'); s.proto='DHCP'; let msg=op===1?'Request':'Reply'; s.f['dhcp.id']=xid; s.f['dhcp.hw.mac_addr']=ch;
+  if(U32(d,o+236)===0x63825363){ n.add('Magic cookie: DHCP',o+236,4); let q=o+240;
+    while(q<e){ const c=d[q]; if(c===0){ q++; continue; } if(c===255){ n.add('Option: (255) End',q,1); break; } const l=U8(d,q+1); need(d,q+2,l); const v=q+2; let txt;
+      switch(c){
+        case 53: msg=DHCPM[d[v]]||String(d[v]); txt=`DHCP Message Type (${msg})`; s.f['dhcp.option.dhcp']=d[v]; break;
+        case 50: txt=`Requested IP Address (${ip4(d,v)})`; s.f['dhcp.option.requested_ip_address']=ip4(d,v); break;
+        case 54: txt=`DHCP Server Identifier (${ip4(d,v)})`; break;
+        case 51: txt=`IP Address Lease Time (${U32(d,v)} s)`; break;
+        case 1: txt=`Subnet Mask (${ip4(d,v)})`; break;
+        case 3: txt=`Router (${ip4(d,v)})`; break;
+        case 6: { const a=[]; for(let k=0;k+4<=l;k+=4) a.push(ip4(d,v+k)); txt=`Domain Name Server (${a.join(', ')})`; break; }
+        case 12: { const h=latin1(d,v,v+l); txt=`Host Name (${h})`; s.f['dhcp.option.hostname']=h; break; }
+        case 55: txt=`Parameter Request List (${l} items)`; break;
+        case 61: txt='Client Identifier'; break;
+        default: txt=`Option ${c} (${l} bytes)`;
+      }
+      n.add(`Option: (${c}) ${txt}`,q,2+l); q+=2+l; } }
+  s.info=`DHCP ${msg} - Transaction ID 0x${hex8(xid)}`;
+}
+function ntp(d,o,e,s,T){
+  const b=d[o], li=b>>6, vn=(b>>3)&7, mode=b&7, st=d[o+1];
+  const n=T.add('Network Time Protocol',o,e-o);
+  n.add(`Leap indicator: ${li}`,o,1); n.add(`Version: ${vn}`,o,1); n.add(`Mode: ${NTPM[mode]||mode} (${mode})`,o,1); n.add(`Stratum: ${st}`,o+1,1); n.add(`Poll interval: ${d[o+2]}`,o+2,1); n.add(`Precision: ${(d[o+3]<<24>>24)}`,o+3,1);
+  const ref=st<=1?latin1(d,o+12,o+16).replace(/\0+$/,''):ip4(d,o+12); n.add(`Reference ID: ${ref}`,o+12,4);
+  const ts=k=>{ const sec=U32(d,k), fr=U32(d,k+4); if(!sec) return '(not set)'; return fmtUTC(sec-2208988800+fr/4294967296)+' UTC'; };
+  n.add(`Reference timestamp: ${ts(o+16)}`,o+16,8); n.add(`Origin timestamp: ${ts(o+24)}`,o+24,8); n.add(`Receive timestamp: ${ts(o+32)}`,o+32,8); n.add(`Transmit timestamp: ${ts(o+40)}`,o+40,8);
+  s.layers.push('ntp'); s.proto='NTP'; s.f['ntp.mode']=mode; s.f['ntp.stratum']=st; s.info=`NTP Version ${vn}, ${NTPM[mode]||'mode '+mode}`;
+}
+function icmp(d,o,e,s,T){
+  need(d,o,4); const t=d[o], c=d[o+1], ck=U16(d,o+2); const nm=ICMPT[t]||`Type ${t}`;
+  const n=T.add('Internet Control Message Protocol',o,e-o); n.add(`Type: ${t} (${nm})`,o,1); n.add(`Code: ${c}${t===3&&UNR[c]?' ('+UNR[c]+')':''}`,o+1,1); n.add(`Checksum: 0x${hex4(ck)}`,o+2,2);
+  s.layers.push('icmp'); s.proto='ICMP'; s.f['icmp.type']=t; s.f['icmp.code']=c; s.info=nm;
+  if((t===0||t===8)&&e-o>=8){ const id=U16(d,o+4), sq=U16(d,o+6); n.add(`Identifier: 0x${hex4(id)}`,o+4,2); n.add(`Sequence number: ${sq}`,o+6,2); if(e-o>8) n.add(`Data (${e-o-8} bytes)`,o+8,e-o-8); s.f['icmp.ident']=id; s.f['icmp.seq']=sq; s.info=`${nm}  id=0x${hex4(id)}, seq=${sq}, ttl=${s.f['ip.ttl']}`; }
+  else if((t===3||t===11)&&e-o>=28){ s.info=`${nm} (${t===3?(UNR[c]||'code '+c):(c?'Fragment reassembly time exceeded':'TTL exceeded in transit')})`;
+    const io=o+8; const os=ip4(d,io+12), od=ip4(d,io+16), opr=d[io+9], ih=(d[io]&15)*4; let port='';
+    if((opr===6||opr===17)&&e>=io+ih+4) port=':'+U16(d,io+ih+2);
+    n.add(`Original datagram: ${IPP[opr]||opr} ${os} → ${od}${port}`,io,e-io); s.info+=` for ${IPP[opr]||opr} ${od}${port}`; }
+}
+function icmp6(d,o,e,s,T){
+  need(d,o,4); const t=d[o], c=d[o+1]; const nm=ICMP6T[t]||`Type ${t}`;
+  const n=T.add('Internet Control Message Protocol v6',o,e-o); n.add(`Type: ${nm} (${t})`,o,1); n.add(`Code: ${c}`,o+1,1); n.add(`Checksum: 0x${hex4(U16(d,o+2))}`,o+2,2);
+  s.layers.push('icmpv6'); s.proto='ICMPv6'; s.f['icmpv6.type']=t; s.f['icmpv6.code']=c; s.info=nm;
+  if((t===128||t===129)&&e-o>=8){ const id=U16(d,o+4), sq=U16(d,o+6); n.add(`Identifier: 0x${hex4(id)}`,o+4,2); n.add(`Sequence: ${sq}`,o+6,2); s.info=`${nm} id=0x${hex4(id)}, seq=${sq}, hop limit=${s.f['ipv6.hlim']}`; }
+  else if((t===135||t===136)&&e-o>=24){ const tg=ip6(d,o+8); n.add(`Target address: ${tg}`,o+8,16); s.f['icmpv6.nd.target']=tg; s.info=t===135?`Neighbor Solicitation for ${tg}`:`Neighbor Advertisement ${tg}`;
+    let q=o+24; while(q+8<=e){ const ot=d[q], ol=d[q+1]*8; if(!ol) break; if((ot===1||ot===2)&&ol>=8){ const m=mac(d,q+2); n.add(`${ot===1?'Source':'Target'} link-layer address: ${m}`,q,ol); s.info+=t===135?` from ${m}`:` is at ${m}`; } else n.add(`Option type ${ot} (${ol} bytes)`,q,ol); q+=ol; } }
+}
+
+/* ================= capture file parsers ================= */
+function parseCapture(buf){
+  if(buf.byteLength<24) throw new Error('This file is too small to be a packet capture.');
+  const dv=new DataView(buf), u8=new Uint8Array(buf);
+  if(dv.getUint32(0,false)===0x0a0d0d0a) return parsePcapng(dv,u8);
+  const m=dv.getUint32(0,false); let le,nano;
+  if(m===0xa1b2c3d4){le=false;nano=false} else if(m===0xd4c3b2a1){le=true;nano=false} else if(m===0xa1b23c4d){le=false;nano=true} else if(m===0x4d3cb2a1){le=true;nano=true}
+  else throw new Error("This file isn't a pcap or pcapng capture. Save it from Wireshark or tcpdump in one of those formats and try again.");
+  const link=dv.getUint32(20,le)&0x0fffffff; const out=[]; let o=24, truncated=false; const div=nano?1e9:1e6;
+  while(o+16<=buf.byteLength){ const sec=dv.getUint32(o,le), frac=dv.getUint32(o+4,le), incl=dv.getUint32(o+8,le), orig=dv.getUint32(o+12,le); o+=16;
+    if(incl>buf.byteLength-o){ truncated=true; break; }
+    out.push({ts:sec+frac/div,data:u8.subarray(o,o+incl),caplen:incl,len:Math.max(orig,incl),link}); o+=incl; }
+  if(o<buf.byteLength&&!truncated&&buf.byteLength-o>0) truncated=true;
+  return {packets:out,format:nano?'pcap (ns)':'pcap',links:[link],truncated};
+}
+function parsePcapng(dv,u8){
+  let o=0, le=true, truncated=false; const ifs=[], out=[], links=new Set(); let lastTs=0;
+  while(o+12<=dv.byteLength){
+    const type=dv.getUint32(o,le);
+    if(type===0x0a0d0d0a){ const bomLE=dv.getUint32(o+8,true); if(bomLE===0x1a2b3c4d) le=true; else if(dv.getUint32(o+8,false)===0x1a2b3c4d) le=false; else throw new Error('This pcapng file has an unreadable section header.'); ifs.length=0; }
+    const blen=dv.getUint32(o+4,le); if(blen<12||o+blen>dv.byteLength){ truncated=true; break; }
+    if(type===1){ const link=dv.getUint16(o+8,le); let res=1e6; let q=o+16; const end=o+blen-4;
+      while(q+4<=end){ const code=dv.getUint16(q,le), l=dv.getUint16(q+2,le); if(code===0) break; if(code===9&&l>=1){ const v=u8[q+4]; res=(v&0x80)?Math.pow(2,v&0x7f):Math.pow(10,v); } q+=4+((l+3)&~3); }
+      ifs.push({link,res}); links.add(link); }
+    else if(type===6||type===2){ const id=type===6?dv.getUint32(o+8,le):dv.getUint16(o+8,le); const hi=dv.getUint32(o+12,le), lo=dv.getUint32(o+16,le), cap=dv.getUint32(o+20,le), orig=dv.getUint32(o+24,le);
+      const itf=ifs[id]||{link:1,res:1e6}; const c=Math.min(cap,blen-32); const ts=hi*(4294967296/itf.res)+lo/itf.res; lastTs=ts;
+      out.push({ts,data:u8.subarray(o+28,o+28+c),caplen:c,len:Math.max(orig,c),link:itf.link,iface:id}); }
+    else if(type===3){ const orig=dv.getUint32(o+8,le); const itf=ifs[0]||{link:1}; const c=Math.min(orig,blen-16); out.push({ts:lastTs,data:u8.subarray(o+12,o+12+c),caplen:c,len:orig,link:itf.link,iface:0}); }
+    o+=blen;
+  }
+  return {packets:out,format:'pcapng',links:[...links],truncated};
+}
+
+/* ================= post-pass analysis ================= */
+function analyze(P){
+  const t0=P.length?P[0].ts:0; T0=t0; const tcpS=new Map(), udpS=new Map(); let ti=0, ui=0, prev=t0;
+  for(const p of P){ const s=p.s, f=s.f;
+    f['frame.time_relative']=+(p.ts-t0).toFixed(9); f['frame.time_delta']=+(p.ts-prev).toFixed(9); prev=p.ts;
+    if(s.tcp){ const t=s.tcp; const a=s.src+'|'+t.sp, b=s.dst+'|'+t.dp; const key=a<b?a+'>'+b:b+'>'+a;
+      let st=tcpS.get(key); if(!st){ st={id:ti++,isn:{},end:{}}; tcpS.set(key,st); }
+      f['tcp.stream']=st.id;
+      if(st.isn[a]===undefined) st.isn[a]=t.seq;
+      const rseq=(t.seq-st.isn[a])>>>0; const rack=(t.fl&16)&&st.isn[b]!==undefined?(t.ack-st.isn[b])>>>0:((t.fl&16)?t.ack:null);
+      const segLen=t.plen+((t.fl&2)?1:0)+((t.fl&1)?1:0);
+      let retrans=0; if(t.plen>0&&st.end[a]!==undefined&&rseq+t.plen<=st.end[a]&&!(t.plen===1&&rseq===st.end[a]-1)) retrans=1;
+      st.end[a]=Math.max(st.end[a]||0,rseq+segLen);
+      f['tcp.seq_raw']=t.seq; f['tcp.ack_raw']=t.ack; f['tcp.seq']=rseq; if(rack!=null) f['tcp.ack']=rack;
+      f['tcp.analysis.retransmission']=retrans; f['tcp.analysis.zero_window']=(t.win===0&&!(t.fl&7))?1:0;
+      s.rel={seq:rseq,ack:rack};
+      if(s.proto==='TCP') s.info=`${t.sp} → ${t.dp} [${flagStr(t.fl)}] Seq=${rseq}${rack!=null?' Ack='+rack:''} Win=${t.win} Len=${t.plen}`;
+      if(retrans) s.info='[TCP Retransmission] '+s.info;
+      else if(f['tcp.analysis.zero_window']) s.info='[TCP ZeroWindow] '+s.info;
+    }
+    if(s.udp){ const a=s.src+'|'+s.udp.sp, b=s.dst+'|'+s.udp.dp; const key=a<b?a+'>'+b:b+'>'+a; let id=udpS.get(key); if(id===undefined){ id=ui++; udpS.set(key,id); } f['udp.stream']=id; }
+    s.color=colorOf(s);
+  }
+  return {tcpStreams:ti,udpStreams:ui};
+}
+function colorOf(s){
+  const L=s.layerSet, f=s.f;
+  if(f.malformed||f['tcp.analysis.retransmission']||(s.tcp&&(s.tcp.fl&4))||f['icmp.type']===3||f['icmpv6.type']===1||(f['dns.flags.response']&&f['dns.flags.rcode'])) return 'bad';
+  if(L.has('http')) return 'http'; if(L.has('tls')||L.has('quic')) return 'tls';
+  if(L.has('dns')||L.has('mdns')||L.has('llmnr')) return 'dns'; if(L.has('arp')) return 'arp';
+  if(L.has('icmp')||L.has('icmpv6')) return 'icmp'; if(s.tcp) return (s.tcp.fl&3)?'syn':'tcp'; if(L.has('udp')) return 'udp'; return 'other';
+}
+
+/* ================= display filter ================= */
+const PROTOS=new Set(['frame','eth','vlan','sll','null','arp','lldp','ip','ipv6','icmp','icmpv6','igmp','tcp','udp','dns','mdns','llmnr','http','tls','dhcp','ntp','quic','ssdp','gre','esp','ah','ospf','pim','vrrp','sctp','ipip']);
+const FIELDS=['frame','frame.number','frame.len','frame.cap_len','frame.time_relative','frame.time_delta','eth.src','eth.dst','eth.addr','eth.type','vlan.id',
+ 'arp.opcode','arp.src.hw_mac','arp.src.proto_ipv4','arp.dst.hw_mac','arp.dst.proto_ipv4',
+ 'ip.src','ip.dst','ip.addr','ip.ttl','ip.proto','ip.id','ip.len','ip.flags.df','ip.flags.mf','ip.fragment',
+ 'ipv6.src','ipv6.dst','ipv6.addr','ipv6.hlim','ipv6.nxt','ipv6.plen','ipv6.fragment','host','port',
+ 'tcp.srcport','tcp.dstport','tcp.port','tcp.seq','tcp.seq_raw','tcp.ack','tcp.ack_raw','tcp.len','tcp.window_size','tcp.flags','tcp.flags.syn','tcp.flags.ack','tcp.flags.fin','tcp.flags.rst','tcp.flags.psh','tcp.flags.urg','tcp.stream','tcp.analysis.retransmission','tcp.analysis.zero_window','tcp.options.mss_val','tcp.options.wscale','tcp.options.sack',
+ 'udp.srcport','udp.dstport','udp.port','udp.length','udp.stream',
+ 'icmp.type','icmp.code','icmp.ident','icmp.seq','icmpv6.type','icmpv6.code','icmpv6.nd.target','igmp.type',
+ 'dns.id','dns.flags.response','dns.flags.rcode','dns.qry.name','dns.qry.type','dns.a','dns.aaaa','dns.cname','dns.count.answers',
+ 'http.request','http.response','http.request.method','http.request.uri','http.host','http.user_agent','http.content_type','http.server','http.response.code',
+ 'tls.sni','tls.handshake.extensions_server_name','tls.handshake.type','tls.record.content_type','tls.alpn','tls.version','tls.cipher','tls.alert',
+ 'dhcp.id','dhcp.hw.mac_addr','dhcp.option.dhcp','dhcp.option.hostname','dhcp.option.requested_ip_address','ntp.mode','ntp.stratum','malformed'];
+const FIELDSET=new Set(FIELDS);
+const OPWORDS={eq:'==',ne:'!=',gt:'>',lt:'<',ge:'>=',le:'<=',contains:'contains',matches:'matches'};
+function tokenize(str){
+  const re=/\s*(?:(\(|\))|(&&|\|\||==|!=|>=|<=|>|<|!|~)|"((?:[^"\\]|\\.)*)"|'([^']*)'|([A-Za-z0-9_.:\/\-]+))/y; const out=[]; let m;
+  re.lastIndex=0;
+  while(re.lastIndex<str.length){ const at=re.lastIndex; if(/^\s*$/.test(str.slice(at))) break; m=re.exec(str); if(!m) throw new Error(`Unexpected character "${str[at+(str.slice(at).length-str.slice(at).trimStart().length)]}" at position ${at+1}.`);
+    if(m[1]) out.push({t:m[1]});
+    else if(m[2]){ const v=m[2]; out.push(v==='&&'?{t:'and'}:v==='||'?{t:'or'}:v==='!'?{t:'not'}:{t:'op',v:v==='~'?'matches':v}); }
+    else if(m[3]!==undefined) out.push({t:'str',v:m[3].replace(/\\(.)/g,'$1')});
+    else if(m[4]!==undefined) out.push({t:'str',v:m[4]});
+    else { const w=m[5], lw=w.toLowerCase(); if(lw==='and'||lw==='or'||lw==='not') out.push({t:lw}); else if(OPWORDS[lw]) out.push({t:'op',v:OPWORDS[lw]}); else out.push({t:'word',v:w}); }
+  }
+  return out;
+}
+function getVals(p,f){ const v=p.s.f[f]; if(v===undefined||v===null) return []; return Array.isArray(v)?v:[v]; }
+const isV4=v=>typeof v==='string'&&/^\d+\.\d+\.\d+\.\d+$/.test(v);
+const v4n=v=>v.split('.').reduce((a,b)=>(a*256)+(+b),0);
+function compileFilter(str){
+  const toks=tokenize(str); let i=0; const peek=()=>toks[i];
+  function pOr(){ let l=pAnd(); while(peek()&&peek().t==='or'){ i++; const L=l, r=pAnd(); l=p=>L(p)||r(p); } return l; }
+  function pAnd(){ let l=pNot(); while(peek()&&peek().t==='and'){ i++; const L=l, r=pNot(); l=p=>L(p)&&r(p); } return l; }
+  function pNot(){ if(peek()&&peek().t==='not'){ i++; const e=pNot(); return p=>!e(p); } return pPrim(); }
+  function pPrim(){ const tk=toks[i++]; if(!tk) throw new Error('The filter ends too early. Add a field or value.');
+    if(tk.t==='('){ const e=pOr(); if(!peek()||peek().t!==')') throw new Error('A closing ")" is missing.'); i++; return e; }
+    if(tk.t==='str'){ const v=tk.v.toLowerCase(); return p=>(p.s.info+' '+p.s.src+' '+p.s.dst+' '+p.s.proto).toLowerCase().includes(v); }
+    if(tk.t==='word'){ const f=tk.v.toLowerCase();
+      if(!PROTOS.has(f)&&!FIELDSET.has(f)) throw new Error(`"${tk.v}" isn't a known protocol or field. To search packet text, put it in quotes: "${tk.v}". Open Filter syntax for the field list.`);
+      if(peek()&&peek().t==='op'){ const op=toks[i++].v; const val=toks[i++]; if(!val||(val.t!=='word'&&val.t!=='str')) throw new Error(`Add a value after "${op}".`); return cmp(f,op,val.v); }
+      if(PROTOS.has(f)&&!FIELDSET.has(f)) return p=>p.s.layerSet.has(f);
+      if(f==='frame') return ()=>true;
+      return p=>getVals(p,f).some(v=>v!==0&&v!==''&&v!=null);
+    }
+    throw new Error(`Unexpected "${tk.v||tk.t}". Start with a protocol (tcp), a field comparison (ip.src == 10.0.0.1), or quoted text.`);
+  }
+  const e=pOr(); if(i<toks.length) throw new Error(`Unexpected "${toks[i].v||toks[i].t}" near the end. Join conditions with && or ||.`); return e;
+}
+function cmp(f,op,raw){
+  let num=null; const lr=String(raw).toLowerCase();
+  if(/^-?\d+(\.\d+)?$/.test(raw)) num=+raw; else if(/^0x[0-9a-f]+$/i.test(raw)) num=parseInt(raw,16); else if(lr==='true') num=1; else if(lr==='false') num=0;
+  if(num===null&&f==='dns.qry.type'&&RRT_REV[lr]!==undefined) num=RRT_REV[lr];
+  if(num===null&&f==='ip.proto'){ const k=Object.keys(IPP).find(k=>IPP[k].toLowerCase()===lr); if(k) num=+k; }
+  let cidr=null; const cm=/^(\d+\.\d+\.\d+\.\d+)\/(\d{1,2})$/.exec(raw); if(cm){ const bits=+cm[2]; const mask=bits===0?0:(0xffffffff<<(32-bits))>>>0; cidr={net:(v4n(cm[1])&mask)>>>0,mask}; }
+  if(f==='frame'){ if(op!=='contains'&&op!=='matches') throw new Error('Use "frame contains" to search raw packet bytes.'); const rx=op==='matches'?mkRe(raw):null; return p=>{ const t=latin1(p.data,0,p.data.length); return rx?rx.test(t):t.toLowerCase().includes(lr); }; }
+  const eq=v=> cidr&&isV4(v) ? ((v4n(v)&cidr.mask)>>>0)===cidr.net : (typeof v==='number'&&num!==null ? v===num : String(v).toLowerCase()===lr);
+  switch(op){
+    case '==': return p=>getVals(p,f).some(eq);
+    case '!=': return p=>{ const vs=getVals(p,f); return vs.length>0&&!vs.some(eq); };
+    case 'contains': return p=>getVals(p,f).some(v=>String(v).toLowerCase().includes(lr));
+    case 'matches': { const rx=mkRe(raw); return p=>getVals(p,f).some(v=>rx.test(String(v))); }
+    default: { if(num===null) throw new Error(`"${op}" needs a number, for example frame.len ${op} 1000.`); const c={'>':(a)=>a>num,'<':(a)=>a<num,'>=':(a)=>a>=num,'<=':(a)=>a<=num}[op]; return p=>getVals(p,f).some(v=>typeof v==='number'&&c(v)); }
+  }
+}
+function mkRe(raw){ try{ return new RegExp(raw,'i'); }catch(e){ throw new Error(`That regular expression doesn't parse: ${e.message}`); } }
+
+/* ================= sample capture ================= */
+function buildSample(){
+  let seed=0x5eed1234; const rnd=()=>{ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };
+  const R=n=>{ const a=new Uint8Array(n); for(let i=0;i<n;i++) a[i]=rnd()*256|0; return a; };
+  const cat=(...a)=>{ const parts=a.map(x=>x instanceof Uint8Array?x:typeof x==='string'?Uint8Array.from(x,c=>c.charCodeAt(0)&255):Uint8Array.from(x)); let n=0; for(const p of parts) n+=p.length; const out=new Uint8Array(n); let o=0; for(const p of parts){ out.set(p,o); o+=p.length; } return out; };
+  const be16=n=>[n>>8&255,n&255], be24=n=>[n>>16&255,n>>8&255,n&255], be32=n=>[n>>>24&255,n>>>16&255,n>>>8&255,n&255];
+  const ipB=s=>s.split('.').map(Number), macB=s=>s.split(':').map(h=>parseInt(h,16));
+  const ip6B=s=>{ const [h,t]=s.split('::'); const hp=h?h.split(':'):[], tp=t?t.split(':'):[]; return [...hp,...Array(8-hp.length-tp.length).fill('0'),...tp].flatMap(g=>be16(parseInt(g,16))); };
+  const csum=b=>{ let s=0; for(let i=0;i<b.length;i+=2) s+=(b[i]<<8)|(b[i+1]||0); while(s>>16) s=(s&0xffff)+(s>>16); return (~s)&0xffff; };
+  const E=new Uint8Array(0); const FIN=1,SYN=2,RST=4,PSH=8,ACK=16; let ipid=0x3a10;
+  const ethF=(src,dst,type,pl)=>cat(macB(dst),macB(src),be16(type),pl);
+  const ip4F=(src,dst,proto,pl,ttl)=>{ const h=cat([0x45,0],be16(20+pl.length),be16(ipid++),[0x40,0],[ttl,proto],[0,0],ipB(src),ipB(dst)); const c=csum(h); h[10]=c>>8; h[11]=c&255; return cat(h,pl); };
+  const ip6F=(src,dst,nh,pl,hl)=>cat([0x60,0,0,0],be16(pl.length),[nh,hl],ip6B(src),ip6B(dst),pl);
+  const tcpF=(sp,dp,seq,ack,flags,pl,opts,win)=>{ opts=[...opts]; while(opts.length%4) opts.push(0); return cat(be16(sp),be16(dp),be32(seq),be32(ack),[((20+opts.length)/4)<<4,flags],be16(win),[0,0],[0,0],opts,pl); };
+  const udpF=(sp,dp,pl)=>cat(be16(sp),be16(dp),be16(8+pl.length),[0,0],pl);
+  const dnsName=n=>cat(...n.split('.').map(l=>cat([l.length],l)),[0]);
+  const dnsQuery=(id,name,type,flags=0x0100)=>cat(be16(id),be16(flags),be16(1),be16(0),be16(0),be16(0),dnsName(name),be16(type),be16(1));
+  const dnsResp=(id,name,type,ans,rc=0)=>cat(be16(id),be16(0x8180|rc),be16(1),be16(ans.length),be16(0),be16(0),dnsName(name),be16(type),be16(1),...ans.map(a=>cat(a.name?dnsName(a.name):[0xc0,0x0c],be16(a.type),be16(1),be32(a.ttl),be16(a.data.length),a.data)));
+  const icmpEcho=(type,id,sq)=>{ const b=cat([type,0,0,0],be16(id),be16(sq),Uint8Array.from({length:48},(_,i)=>0x10+i)); const c=csum(b); b[2]=c>>8; b[3]=c&255; return b; };
+  const ntpTs=ts=>cat(be32(Math.floor(ts)+2208988800),be32(Math.floor((ts%1)*4294967296)));
+  const ntpPkt=(mode,st,ts)=>{ const b=new Uint8Array(48); b[0]=(4<<3)|mode; b[1]=st; b[2]=6; b[3]=0xe9; if(mode===4){ b.set([17,253,4,125],12); b.set(ntpTs(ts-64),16); b.set(ntpTs(ts-0.0011),24); b.set(ntpTs(ts-0.0004),32); } b.set(ntpTs(ts),40); return b; };
+  const ext=(t,b)=>cat(be16(t),be16(b.length),b);
+  const clientHello=sni=>{ const sn=cat(sni); const exts=cat(ext(0,cat(be16(sn.length+3),[0],be16(sn.length),sn)),ext(23,[]),ext(65281,[0]),ext(10,cat(be16(6),be16(0x1d),be16(0x17),be16(0x18))),ext(11,[1,0]),
+      ext(16,cat(be16(12),[2],'h2',[8],'http/1.1')),ext(13,cat(be16(8),be16(0x0403),be16(0x0804),be16(0x0401),be16(0x0503))),ext(51,cat(be16(36),be16(0x1d),be16(32),R(32))),ext(45,[1,1]),ext(43,cat([4],be16(0x0304),be16(0x0303))));
+    const cs=[0x1301,0x1303,0x1302,0xc02b,0xc02f,0xcca9,0xcca8,0xc02c,0xc030,0xc013,0xc014,0x009c,0x009d,0x002f,0x0035];
+    const body=cat(be16(0x0303),R(32),[32],R(32),be16(cs.length*2),...cs.map(be16),[1,0],be16(exts.length),exts); const hs=cat([1],be24(body.length),body); return cat([0x16,3,1],be16(hs.length),hs); };
+  const serverHello=()=>{ const exts=cat(ext(43,be16(0x0304)),ext(51,cat(be16(0x1d),be16(32),R(32)))); const body=cat(be16(0x0303),R(32),[32],R(32),be16(0x1301),[0],be16(exts.length),exts); const hs=cat([2],be24(body.length),body); return cat([0x16,3,3],be16(hs.length),hs); };
+  const appData=n=>cat([0x17,3,3],be16(n),R(n));
+  const synOpts=ws=>[2,4,...be16(1460),4,2,8,10,...be32(3141592653),0,0,0,0,1,3,3,ws];
+  const synAckOpts=ws=>[2,4,...be16(1440),4,2,8,10,...be32(271828182),...be32(3141592653),1,3,3,ws];
+
+  const ME='192.168.1.42', GW='192.168.1.1', MEM='3c:22:fb:7a:10:4e', GWM='a4:91:b1:0c:22:01', BC='ff:ff:ff:ff:ff:ff';
+  const WEB='198.51.100.20', API='203.0.113.50', SSH='198.51.100.77', PING='1.1.1.1';
+  const toNet=(src,dst,proto,pl)=>ethF(MEM,GWM,0x0800,ip4F(src,dst,proto,pl,64));
+  const fromNet=(src,dst,proto,pl,ttl)=>ethF(GWM,MEM,0x0800,ip4F(src,dst,proto,pl,ttl));
+  const conn=(cip,cp,sip,sp,ciss,siss,ttl)=>{ const c={cseq:ciss>>>0,sseq:siss>>>0}; const adv=(seq,fl,pl)=>(seq+pl.length+((fl&SYN)?1:0)+((fl&FIN)?1:0))>>>0;
+    c.c=(fl,pl=E,opts=[])=>{ const f=toNet(cip,sip,6,tcpF(cp,sp,c.cseq,(fl&ACK)?c.sseq:0,fl,pl,opts,fl&SYN?64240:502)); c.cseq=adv(c.cseq,fl,pl); return f; };
+    c.s=(fl,pl=E,opts=[])=>{ const f=fromNet(sip,cip,6,tcpF(sp,cp,c.sseq,(fl&ACK)?c.cseq:0,fl,pl,opts,fl&SYN?65160:(fl&RST?0:509)),ttl); c.sseq=adv(c.sseq,fl,pl); return f; };
+    return c; };
+  const out=[]; let t=Date.UTC(2026,10,19,14,2,11)/1000+0.104233;
+  const push=(dt,fr)=>{ t+=dt; out.push({ts:t,data:fr,caplen:fr.length,len:fr.length,link:1}); };
+
+  push(0, ethF(MEM,BC,0x0806,cat(be16(1),be16(0x0800),[6,4],be16(1),macB(MEM),ipB(ME),[0,0,0,0,0,0],ipB(GW))));
+  push(0.001412, ethF(GWM,MEM,0x0806,cat(be16(1),be16(0x0800),[6,4],be16(2),macB(GWM),ipB(GW),macB(MEM),ipB(ME))));
+  push(0.000218, toNet(ME,GW,17,udpF(53114,53,dnsQuery(0x4f2a,'www.example.com',1))));
+  push(0.018734, fromNet(GW,ME,17,udpF(53,53114,dnsResp(0x4f2a,'www.example.com',1,[{type:1,ttl:300,data:ipB(WEB)}])),64));
+  const h=conn(ME,51544,WEB,80,0x6a1b2c3d,0x91e0aa10,54);
+  push(0.000391, h.c(SYN,E,synOpts(7)));
+  push(0.024102, h.s(SYN|ACK,E,synAckOpts(9)));
+  push(0.000088, h.c(ACK));
+  push(0.000211, h.c(PSH|ACK,cat('GET /index.html HTTP/1.1\r\nHost: www.example.com\r\nUser-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:132.0) Gecko/20100101 Firefox/132.0\r\nAccept: text/html,application/xhtml+xml\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n')));
+  push(0.023877, h.s(ACK));
+  const body='<!doctype html>\n<html>\n<head><title>Example Domain</title></head>\n<body>\n<h1>Example Domain</h1>\n<p>This domain is for use in documentation examples.</p>\n</body>\n</html>\n';
+  push(0.001204, h.s(PSH|ACK,cat(`HTTP/1.1 200 OK\r\nServer: nginx/1.24.0\r\nDate: Thu, 19 Nov 2026 14:02:11 GMT\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n${body}`)));
+  push(0.000097, h.c(ACK));
+  push(0.000512, h.s(FIN|ACK));
+  push(0.000301, h.c(FIN|ACK));
+  push(0.023650, h.s(ACK));
+  push(0.412004, toNet(ME,GW,17,udpF(40712,53,dnsQuery(0x9c01,'api.example.net',1))));
+  push(0.000124, toNet(ME,GW,17,udpF(40713,53,dnsQuery(0x9c02,'api.example.net',28))));
+  push(0.021338, fromNet(GW,ME,17,udpF(53,40712,dnsResp(0x9c01,'api.example.net',1,[{type:5,ttl:60,data:dnsName('edge.example.net')},{name:'edge.example.net',type:1,ttl:60,data:ipB(API)}])),64));
+  push(0.000843, fromNet(GW,ME,17,udpF(53,40713,dnsResp(0x9c02,'api.example.net',28,[{type:5,ttl:60,data:dnsName('edge.example.net')}])),64));
+  push(0.000301, toNet(ME,GW,17,udpF(40714,53,dnsQuery(0x9c03,'telemetry.example.invalid',1))));
+  push(0.015022, fromNet(GW,ME,17,udpF(53,40714,dnsResp(0x9c03,'telemetry.example.invalid',1,[],3)),64));
+  const s=conn(ME,51546,API,443,0x1f00c2aa,0x5d77e901,52);
+  push(0.000512, s.c(SYN,E,synOpts(7)));
+  push(0.031207, s.s(SYN|ACK,E,synAckOpts(10)));
+  push(0.000071, s.c(ACK));
+  push(0.000932, s.c(PSH|ACK,clientHello('api.example.net')));
+  push(0.030801, s.s(ACK));
+  push(0.002144, s.s(PSH|ACK,cat(serverHello(),[0x14,3,3,0,1,1],appData(1024))));
+  push(0.000066, s.c(ACK));
+  push(0.001402, s.c(PSH|ACK,cat([0x14,3,3,0,1,1],appData(53))));
+  const req=appData(148); const before=s.cseq; push(0.000204, s.c(PSH|ACK,req)); const after=s.cseq;
+  s.cseq=before; push(0.204011, s.c(PSH|ACK,req)); s.cseq=after;
+  push(0.031188, s.s(ACK));
+  push(0.018430, s.s(PSH|ACK,appData(1180)));
+  push(0.000092, s.c(ACK));
+  for(let k=1;k<=3;k++){ push(k===1?0.602113:0.968440, toNet(ME,PING,1,icmpEcho(8,0x0d21,k))); push(0.011+k*0.0007, fromNet(PING,ME,1,icmpEcho(0,0x0d21,k),57)); }
+  const r=conn(ME,51550,SSH,22,0x77aa0102,0,54);
+  push(0.331870, r.c(SYN,E,synOpts(7)));
+  push(0.027115, r.s(RST|ACK));
+  push(0.410551, toNet(ME,GW,17,udpF(123,123,ntpPkt(3,0,t+0.410551))));
+  push(0.002104, fromNet(GW,ME,17,udpF(123,123,ntpPkt(4,2,t+0.002104)),64));
+  push(0.520330, ethF(MEM,'33:33:00:00:00:fb',0x86dd,ip6F('fe80::3e22:fbff:fe7a:104e','ff02::fb',17,udpF(5353,5353,dnsQuery(0,'_ipp._tcp.local',12,0)),255)));
+  return out;
+}
+function parseHexText(text){
+  const out=[];
+  for(let line of text.split(/\r?\n/)){ line=line.trim(); if(!line) continue;
+    const compact=line.replace(/0x/gi,'').replace(/[\s:,-]+/g,'');
+    if(/^[0-9a-fA-F]+$/.test(compact)&&!/\s{2,}/.test(line)&&!/^[0-9a-f]{4,8}:\s/i.test(line)){ if(compact.length%2) throw new Error('The hex has an odd number of digits. Check that no digit is missing.'); for(let i=0;i<compact.length;i+=2) out.push(parseInt(compact.slice(i,i+2),16)); continue; }
+    let toks=line.replace(/^0x/i,'').split(/\s+/);
+    if(toks.length>1&&/^[0-9a-fA-F]{4,8}:?$/.test(toks[0])) toks.shift();
+    for(const t of toks){ if(/^[0-9a-fA-F]{2}$/.test(t)) out.push(parseInt(t,16)); else if(/^[0-9a-fA-F]{4}$/.test(t)) out.push(parseInt(t.slice(0,2),16),parseInt(t.slice(2),16)); else break; }
+  }
+  if(!out.length) throw new Error('No hex bytes found. Paste bytes like "45 00 00 3c" or a hex stream.');
+  return new Uint8Array(out);
+}
+</script>
+
+<script id="ui">
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ROW=24;
+const STATE={packets:[],view:[],sel:-1,selPos:-1,name:'',format:'',links:[],timeMode:'rel',tab:'packets',filter:'',loadMs:0,sample:false,statsDirty:true,chartMode:'pk'};
+const els={list:$('#list'),rows:$('#rows'),spacer:$('#spacer'),tree:$('#tree'),hex:$('#hexdump'),filter:$('#filter'),fwrap:$('#fwrap'),fmsg:$('#fmsg'),status:$('#status'),stats:$('#statsView'),modal:$('#modal')};
+let NODES=[], HEXB=[], ASCB=[], HLR=null, SELNODE=-1, CHART=null;
+
+const CHIPS=[['tcp','tcp'],['udp','udp'],['dns','dns'],['http','http'],['tls','tls'],['arp','arp'],['icmp','icmp || icmpv6'],['SYNs','tcp.flags.syn==1 && tcp.flags.ack==0'],['Problems','tcp.analysis.retransmission || tcp.flags.rst==1 || dns.flags.rcode != 0 || malformed']];
+$('#chips').innerHTML=CHIPS.map(([l,f])=>`<button class="chip" data-f="${esc(f)}" title="${esc(f)}">${esc(l)}</button>`).join('');
+
+const fmtNum=n=>n.toLocaleString('en-US');
+function fmtBytes(n){ if(n<1000) return n+' B'; const u=['kB','MB','GB','TB']; let i=-1; do{ n/=1000; i++; }while(n>=1000&&i<u.length-1); return n.toFixed(n<10?2:n<100?1:0)+' '+u[i]; }
+function fmtRate(bps){ if(bps<1000) return bps.toFixed(0)+' bit/s'; const u=['kbit/s','Mbit/s','Gbit/s']; let i=-1; do{ bps/=1000; i++; }while(bps>=1000&&i<u.length-1); return bps.toFixed(bps<10?2:1)+' '+u[i]; }
+function fmtDur(s){ if(s<1) return (s*1000).toFixed(1)+' ms'; if(s<120) return s.toFixed(2)+' s'; const m=Math.floor(s/60); if(m<120) return `${m} min ${Math.round(s%60)} s`; return `${Math.floor(m/60)} h ${m%60} min`; }
+function bsearch(a,x){ let lo=0,hi=a.length-1; while(lo<=hi){ const m=(lo+hi)>>1; if(a[m]===x) return m; if(a[m]<x) lo=m+1; else hi=m-1; } return -1; }
+function toast(msg,ms=4200){ const t=$('#toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast.h); toast.h=setTimeout(()=>t.hidden=true,ms); }
+
+/* ---------- loading ---------- */
+async function loadCapture(raw,meta){
+  const t1=performance.now(); const busy=$('#busy'); const big=raw.length>6000;
+  if(big){ busy.hidden=false; $('#busyText').textContent=`Decoding ${fmtNum(raw.length)} packets…`; }
+  const P=new Array(raw.length);
+  for(let i=0;i<raw.length;i++){ const r=raw[i]; const p={no:i+1,ts:r.ts,data:r.data,caplen:r.caplen,len:r.len,link:r.link,iface:r.iface}; p.s=decode(p,false).s; P[i]=p;
+    if(big&&i%3000===2999){ $('#busyBar').style.width=(100*i/raw.length).toFixed(1)+'%'; await new Promise(r=>setTimeout(r,0)); } }
+  analyze(P); busy.hidden=true; $('#busyBar').style.width='0';
+  Object.assign(STATE,{packets:P,name:meta.name,format:meta.format,links:meta.links,sample:!!meta.sample,sel:-1,selPos:-1,loadMs:performance.now()-t1,statsDirty:true});
+  $('#fileName').textContent=meta.name; $('#fileName').title=meta.name; $('#fileTag').hidden=!meta.sample;
+  $('#fileMeta').textContent=`${meta.format} · ${meta.links.map(linkName).join(', ')||'no interfaces'}`;
+  if(meta.truncated) toast('The file ends partway through a packet. Everything before that point was loaded.');
+  const ok=applyFilter(els.filter.value,true);
+  if(!ok){ els.filter.value=''; applyFilter('',true); }
+  if(STATE.view.length) selectPos(0,true); else renderDetail();
+}
+async function openFile(file){
+  try{
+    let buf=await file.arrayBuffer(); const head=new Uint8Array(buf,0,Math.min(2,buf.byteLength));
+    if(head[0]===0x1f&&head[1]===0x8b){ if(!('DecompressionStream' in window)) throw new Error('This browser cannot open gzip files. Decompress the capture first.'); buf=await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer(); }
+    const r=parseCapture(buf); if(!r.packets.length) throw new Error('The capture opened, but it has no packets in it.');
+    await loadCapture(r.packets,{name:file.name,format:r.format,links:r.links,truncated:r.truncated});
+  }catch(e){ $('#busy').hidden=true; toast(e.message||String(e),6000); }
+}
+function loadSample(){ const pk=buildSample(); return loadCapture(pk,{name:'sample-home-network.pcap',format:'pcap',links:[1],sample:true}); }
+
+/* ---------- filter ---------- */
+function validateFilter(){ const v=els.filter.value.trim(); els.fwrap.classList.remove('ok','bad'); if(!v){ els.fmsg.textContent=''; els.fmsg.className=''; return true; }
+  try{ compileFilter(v); els.fwrap.classList.add('ok'); els.fmsg.textContent=''; els.fmsg.className=''; return true; }catch(e){ els.fwrap.classList.add('bad'); els.fmsg.textContent=e.message; els.fmsg.className='err'; return false; } }
+function applyFilter(text,quiet){
+  text=(text||'').trim(); let fn=null;
+  try{ fn=text?compileFilter(text):null; }catch(e){ els.fwrap.classList.remove('ok'); els.fwrap.classList.add('bad'); els.fmsg.textContent=e.message; els.fmsg.className='err'; return false; }
+  STATE.filter=text; const P=STATE.packets, v=[]; for(let i=0;i<P.length;i++) if(!fn||fn(P[i])) v.push(i);
+  STATE.view=v; els.fwrap.classList.remove('bad'); els.fwrap.classList.toggle('ok',!!text); els.fmsg.className='';
+  els.fmsg.textContent=text&&!quiet?`${fmtNum(v.length)} of ${fmtNum(P.length)} packets match.`:'';
+  STATE.selPos=STATE.sel>=0?bsearch(v,STATE.sel):-1;
+  if(STATE.selPos<0&&v.length){ STATE.selPos=0; STATE.sel=v[0]; renderDetail(); }
+  else if(!v.length){ STATE.sel=-1; renderDetail(); }
+  els.list.scrollTop=0; renderList(); ensureVisible(); updateStatus();
+  STATE.statsDirty=true; if(STATE.tab==='stats') renderStats();
+  return true;
+}
+function setFilter(f){ els.filter.value=f; applyFilter(f); if(STATE.tab!=='packets') switchTab('packets'); }
+
+/* ---------- list ---------- */
+function fmtTime(p,k){ if(STATE.timeMode==='rel') return (p.ts-T0).toFixed(6); if(STATE.timeMode==='delta'){ const pv=k>0?STATE.packets[STATE.view[k-1]]:null; return (pv?p.ts-pv.ts:0).toFixed(6); } return fmtUTC(p.ts).slice(11); }
+function renderList(){
+  const V=STATE.view, P=STATE.packets; els.spacer.style.height=(V.length*ROW)+'px';
+  if(!V.length){ els.rows.innerHTML=`<div class="nomatch">${P.length?'No packets match this filter. Clear it or try a broader one.':'No capture loaded. Open a .pcap or .pcapng file, or drop one anywhere on this page.'}</div>`; return; }
+  const st=els.list.scrollTop, h=els.list.clientHeight||400; const a=Math.max(0,Math.floor(st/ROW)-8), b=Math.min(V.length,Math.ceil((st+h)/ROW)+8);
+  let html=''; for(let k=a;k<b;k++){ const i=V[k], p=P[i], s=p.s;
+    html+=`<div class="row r-${s.color}${i===STATE.sel?' sel':''}" data-i="${i}" style="top:${k*ROW}px" role="row" aria-selected="${i===STATE.sel}"><span class="c-no">${p.no}</span><span class="c-time">${fmtTime(p,k)}</span><span title="${esc(s.src)}">${esc(s.src)}</span><span title="${esc(s.dst)}">${esc(s.dst)}</span><span>${esc(s.proto)}</span><span class="c-len">${p.len}</span><span title="${esc(s.info)}">${esc(s.info)}</span></div>`; }
+  els.rows.innerHTML=html;
+}
+function selectPos(pos,scroll){ if(pos<0||pos>=STATE.view.length) return; STATE.selPos=pos; STATE.sel=STATE.view[pos]; renderList(); renderDetail(); if(scroll) ensureVisible(); }
+function ensureVisible(){ const pos=STATE.selPos; if(pos<0) return; const top=pos*ROW, st=els.list.scrollTop, h=els.list.clientHeight; if(top<st) els.list.scrollTop=top; else if(top+ROW>st+h) els.list.scrollTop=top+ROW-h; renderList(); }
+let rafL=0; els.list.addEventListener('scroll',()=>{ if(!rafL) rafL=requestAnimationFrame(()=>{ rafL=0; renderList(); }); });
+els.rows.addEventListener('click',e=>{ const r=e.target.closest('.row'); if(!r) return; const i=+r.dataset.i; selectPos(bsearch(STATE.view,i),false); els.list.focus({preventScroll:true}); });
+els.list.addEventListener('keydown',e=>{ const V=STATE.view; if(!V.length) return; let pos=STATE.selPos; const page=Math.max(1,Math.floor(els.list.clientHeight/ROW)-1);
+  const m={ArrowDown:1,ArrowUp:-1,PageDown:page,PageUp:-page}; if(e.key in m) pos=pos<0?0:Math.min(V.length-1,Math.max(0,pos+m[e.key])); else if(e.key==='Home') pos=0; else if(e.key==='End') pos=V.length-1; else return;
+  e.preventDefault(); selectPos(pos,true); });
+new ResizeObserver(()=>renderList()).observe(els.list);
+
+/* ---------- details + hex ---------- */
+function renderDetail(){
+  const p=STATE.packets[STATE.sel]; const fb=$('#followBtn');
+  if(!p){ els.tree.innerHTML='<p class="empty">Select a packet to see its protocol layers.</p>'; els.hex.innerHTML=''; $('#detailTitle').textContent=''; $('#hexSel').textContent=''; fb.disabled=true; return; }
+  const {T}=decode(p,true); NODES=[]; SELNODE=-1;
+  const last=T.kids.length-1;
+  els.tree.innerHTML=T.kids.map((k,i)=>nodeHtml(k,-1,0,i!==0||last===0)).join('');
+  $('#detailTitle').textContent=`Frame ${p.no} · ${p.s.proto}`;
+  const hasStream=(p.s.tcp&&p.s.f['tcp.stream']!=null)||(p.s.udp&&p.s.f['udp.stream']!=null);
+  fb.disabled=!hasStream; fb.textContent=p.s.tcp?'Follow TCP stream':p.s.udp?'Follow UDP stream':'Follow stream';
+  renderHex(p.data); $('#hexSel').textContent=`${p.caplen} bytes. Click a field or a byte to match them up.`;
+}
+function nodeHtml(n,parent,depth,open){
+  const id=NODES.length; NODES.push({n,parent,depth}); const has=n.kids.length>0;
+  let h=`<div class="tn${has&&open?' open':''}" data-id="${id}" data-depth="${depth}"><div class="tl" data-id="${id}" style="--d:${depth}" tabindex="-1">${has?'<span class="car" data-t="1"></span>':'<span class="car-sp"></span>'}<span class="tt">${esc(n.label)}</span></div>`;
+  if(has) h+='<div class="tk">'+n.kids.map(k=>nodeHtml(k,id,depth+1,false)).join('')+'</div>';
+  return h+'</div>';
+}
+function renderHex(d){
+  const n=Math.min(d.length,16384); const rows=[];
+  for(let r=0;r<n;r+=16){ let hx='', as=''; for(let j=0;j<16;j++){ const i=r+j; if(i<n){ const b=d[i]; hx+=`<span class="b" data-i="${i}">${hex2(b)}</span>`; as+=`<span class="a" data-i="${i}">${b>=32&&b<127?esc(String.fromCharCode(b)):'·'}</span>`; } else hx+='<span class="b">  </span>'; if(j===7) hx+='<span class="gap"></span>'; }
+    rows.push(`<div class="hr"><span class="ho">${r.toString(16).padStart(4,'0')}</span><span class="hx">${hx}</span><span class="ha">${as}</span></div>`); }
+  if(d.length>n) rows.push(`<div class="hnote">Showing the first ${fmtNum(n)} of ${fmtNum(d.length)} bytes.</div>`);
+  els.hex.innerHTML=rows.join(''); HEXB=els.hex.querySelectorAll('.b[data-i]'); ASCB=els.hex.querySelectorAll('.a'); HLR=null;
+}
+function highlight(off,len){
+  if(HLR) for(let i=HLR[0];i<HLR[1];i++){ HEXB[i]&&HEXB[i].classList.remove('hl'); ASCB[i]&&ASCB[i].classList.remove('hl'); }
+  HLR=null; if(off==null||!len) return; const e=Math.min(off+len,HEXB.length); HLR=[off,e];
+  for(let i=off;i<e;i++){ HEXB[i].classList.add('hl'); ASCB[i].classList.add('hl'); }
+  if(HEXB[off]) HEXB[off].scrollIntoView({block:'nearest'});
+}
+function selectNode(id,scrollTree){
+  const prev=els.tree.querySelector('.tl.sel'); if(prev) prev.classList.remove('sel');
+  SELNODE=id; const nd=NODES[id]; if(!nd) return;
+  let pid=nd.parent; while(pid>=0){ els.tree.querySelector(`.tn[data-id="${pid}"]`).classList.add('open'); pid=NODES[pid].parent; }
+  const tl=els.tree.querySelector(`.tl[data-id="${id}"]`); tl.classList.add('sel'); if(scrollTree) tl.scrollIntoView({block:'nearest'});
+  const {off,len,label}=nd.n; highlight(off,len);
+  $('#hexSel').textContent=off!=null&&len?`Bytes ${off}–${off+len-1} (${len}): ${label}`:label;
+}
+els.tree.addEventListener('click',e=>{ const tl=e.target.closest('.tl'); if(!tl) return; const id=+tl.dataset.id; if(e.target.dataset.t){ tl.parentElement.classList.toggle('open'); return; } selectNode(id,false); });
+els.tree.addEventListener('dblclick',e=>{ const tl=e.target.closest('.tl'); if(tl&&NODES[+tl.dataset.id].n.kids.length) tl.parentElement.classList.toggle('open'); });
+els.hex.addEventListener('click',e=>{ const t=e.target.closest('[data-i]'); if(!t) return; const i=+t.dataset.i; let best=-1, bl=Infinity, bd=-1;
+  NODES.forEach((nd,id)=>{ const {off,len}=nd.n; if(off!=null&&len>0&&i>=off&&i<off+len&&(len<bl||(len===bl&&nd.depth>bd))){ best=id; bl=len; bd=nd.depth; } });
+  if(best>=0) selectNode(best,true); else highlight(i,1); });
+
+/* ---------- follow stream ---------- */
+function followStream(){
+  const p=STATE.packets[STATE.sel]; if(!p) return; const isT=!!p.s.tcp; const key=isT?'tcp.stream':'udp.stream'; const id=p.s.f[key];
+  const list=STATE.packets.filter(q=>q.s.f[key]===id&&(isT?q.s.tcp:q.s.udp)); const first=list[0]; const cli=first.s.src+'|'+first.s.sport;
+  const chunks=[]; const tot=[0,0]; let shown=0;
+  for(const q of list){ if(q.s.f['tcp.analysis.retransmission']) continue; const [po,pl]=q.s.pay||[0,0]; if(!pl) continue; const dir=(q.s.src+'|'+q.s.sport)===cli?0:1; tot[dir]+=pl;
+    if(shown>2e6) continue; shown+=pl; const b=q.data.subarray(po,po+pl); const lc=chunks[chunks.length-1]; if(lc&&lc.dir===dir) lc.parts.push(b); else chunks.push({dir,parts:[b]}); }
+  const A=`${first.s.src}:${first.s.sport}`, B=`${first.s.dst}:${first.s.dport}`;
+  const render=mode=>chunks.map(c=>{ let t=''; for(const b of c.parts){ if(mode==='hex'){ for(let i=0;i<b.length;i+=16) t+=Array.from(b.subarray(i,i+16),hex2).join(' ')+'\n'; } else { for(let i=0;i<b.length;i++){ const x=b[i]; t+=(x>=32&&x<127)||x===10||x===9?String.fromCharCode(x):x===13?'':'.'; } } } return `<span class="d${c.dir}">${esc(t)}</span>`; }).join(mode==='hex'?'\n':'');
+  const body=`<div class="legend"><span><i class="sw" style="background:var(--accent)"></i>${esc(A)} → ${esc(B)}: ${fmtBytes(tot[0])}</span><span><i class="sw" style="background:var(--crit)"></i>${esc(B)} → ${esc(A)}: ${fmtBytes(tot[1])}</span>
+    <span style="flex:1"></span><span class="seg"><button data-m="ascii" aria-pressed="true">ASCII</button><button data-m="hex" aria-pressed="false">Hex</button></span></div>
+    ${chunks.length?`<pre class="stream" id="streamPre">${render('ascii')}</pre>`:'<p class="empty">This stream carries no payload bytes, only control segments.</p>'}
+    ${isT&&chunks.length?'<p class="hint">Retransmitted segments are left out. Encrypted payloads (TLS, QUIC) show as unreadable bytes.</p>':''}`;
+  openModal(`Follow ${isT?'TCP':'UDP'} stream ${id}`,body,`<button class="primary" data-act="filter">Filter to this stream</button>`);
+  els.modal.querySelector('.seg')?.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; els.modal.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x===b)); const pre=$('#streamPre'); if(pre) pre.innerHTML=render(b.dataset.m); });
+  els.modal.querySelector('[data-act="filter"]').addEventListener('click',()=>{ closeModal(); setFilter(`${key} == ${id}`); });
+}
+$('#followBtn').addEventListener('click',followStream);
+
+/* ---------- modal ---------- */
+let lastFocus=null;
+function openModal(title,body,actions=''){ lastFocus=document.activeElement;
+  els.modal.innerHTML=`<div class="mbox" role="dialog" aria-modal="true" aria-labelledby="mt"><div class="mhead"><h2 id="mt">${esc(title)}</h2><button class="x" data-close aria-label="Close">×</button></div><div class="mbody">${body}</div><div class="mfoot">${actions}<button data-close>Close</button></div></div>`;
+  els.modal.hidden=false; els.modal.querySelector('.mfoot button').focus(); }
+function closeModal(){ els.modal.hidden=true; els.modal.innerHTML=''; if(lastFocus) lastFocus.focus({preventScroll:true}); }
+els.modal.addEventListener('click',e=>{ if(e.target===els.modal||e.target.closest('[data-close]')) closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!els.modal.hidden) closeModal(); });
+
+function showHelp(){
+  const groups={}; for(const f of FIELDS){ const g=f.split('.')[0]; (groups[g]=groups[g]||[]).push(f); }
+  const ex=[['tcp','TCP packets'],['dns || mdns','DNS and multicast DNS'],['ip.addr == 192.168.1.42','To or from one IPv4 address'],['ip.addr == 10.0.0.0/8','Anything in a subnet'],['tcp.port == 443 && !tls','Port 443 traffic that isn\'t TLS'],['tcp.flags.syn==1 && tcp.flags.ack==0','Connection attempts'],['tcp.stream == 3','One TCP conversation'],['dns.qry.name contains "example"','DNS lookups for a name'],['http.request.method == POST','HTTP POSTs'],['tls.sni matches "\\.example\\.(net|com)$"','TLS server names, regex'],['frame.len > 1000','Large frames'],['frame contains "password"','Raw bytes contain text'],['"Who has"','Quoted text searches the Info, address and protocol columns']];
+  const body=`<div class="help">
+    <p>Filters use Wireshark's display filter style. Type a protocol name, compare a field with a value, and join conditions with <code>&&</code>, <code>||</code> and <code>!</code> (or <code>and</code>, <code>or</code>, <code>not</code>). Parentheses group conditions.</p>
+    <p>Operators: <code>==</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> <code>contains</code> <code>matches</code> (regular expression, case-insensitive). A bare field such as <code>tcp.analysis.retransmission</code> matches when the field is present and not zero. Fields with two values, like <code>ip.addr</code> and <code>tcp.port</code>, match if either side does. Press Enter to apply.</p>
+    <h4>Examples</h4><div class="ex">${ex.map(([f,d])=>`<div><button class="chip" data-f="${esc(f)}">${esc(f)}</button></div><div class="muted">${esc(d)}</div>`).join('')}</div>
+    <h4>Protocols</h4><p class="mono" style="font-size:12px">${[...PROTOS].join('  ')}</p>
+    <h4>Fields</h4><div class="fields">${Object.values(groups).flat().map(f=>`<div>${esc(f)}</div>`).join('')}</div>
+    <h4>Row colors</h4><div class="swatches">${[['tcp','TCP'],['syn','TCP SYN / FIN'],['udp','UDP'],['dns','DNS'],['http','HTTP'],['tls','TLS / QUIC'],['icmp','ICMP'],['arp','ARP'],['bad','Problems: RST, retransmission, errors']].map(([c,l])=>`<span class="r-${c}">${l}</span>`).join('')}</div>
+  </div>`;
+  openModal('Display filter syntax',body);
+  els.modal.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{ closeModal(); setFilter(b.dataset.f); }));
+}
+function showPaste(){
+  const body=`<p style="margin-top:0">Paste the bytes of one packet: a hex stream from Wireshark (Copy › as a Hex Stream), <code class="mono">tcpdump -xx</code> output, or a hex dump with offsets.</p>
+    <label for="pasteText" class="sr">Packet bytes in hex</label><textarea id="pasteText" spellcheck="false" placeholder="0000  ff ff ff ff ff ff 3c 22 fb 7a 10 4e 08 06 00 01"></textarea>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap"><label for="pasteLink">First header</label><select id="pasteLink"><option value="1">Ethernet</option><option value="101">IP (no link layer)</option><option value="113">Linux cooked (SLL)</option></select><span id="pasteErr" style="color:var(--crit);font-size:13px"></span></div>`;
+  openModal('Decode pasted bytes',body,'<button class="primary" id="pasteGo">Decode</button>');
+  $('#pasteGo').addEventListener('click',async()=>{ try{ const d=parseHexText($('#pasteText').value); const link=+$('#pasteLink').value; closeModal(); await loadCapture([{ts:Date.now()/1000,data:d,caplen:d.length,len:d.length,link}],{name:'Pasted bytes',format:'hex',links:[link]}); }catch(e){ $('#pasteErr').textContent=e.message; } });
+}
+
+/* ---------- stats ---------- */
+const PROTO_FILTER={IPv4:'ip',IPv6:'ipv6',Ethernet:'eth',ICMPv6:'icmpv6','802.1Q VLAN':'vlan'};
+function computeStats(){
+  const P=STATE.packets, V=STATE.view; let bytes=0, tmin=Infinity, tmax=-Infinity;
+  const proto=new Map(), ep=new Map(), conv=new Map(), dnsm=new Map(), hostm=new Map(); const ex={retrans:0,rst:0,zw:0,dnserr:0,unreach:0,malformed:0,trunc:0};
+  const inc=(m,k,b)=>{ const e=m.get(k)||{pk:0,b:0}; e.pk++; e.b+=b; m.set(k,e); };
+  for(const i of V){ const p=P[i], s=p.s, f=s.f; bytes+=p.len; if(p.ts<tmin) tmin=p.ts; if(p.ts>tmax) tmax=p.ts; inc(proto,s.proto,p.len);
+    const iv=f['ip.src']?'ip':f['ipv6.src']?'ipv6':null;
+    if(iv){ const a=f[iv+'.src'], b=f[iv+'.dst'];
+      for(const [x,dir] of [[a,'tx'],[b,'rx']]){ const e=ep.get(x)||{addr:x,iv,pk:0,tx:0,rx:0}; e.pk++; e[dir]+=p.len; ep.set(x,e); }
+      let pr=iv==='ip'?'IPv4':'IPv6', pa=null, pb=null; if(s.tcp){ pr='TCP'; pa=s.tcp.sp; pb=s.tcp.dp; } else if(s.udp){ pr='UDP'; pa=s.udp.sp; pb=s.udp.dp; }
+      const A=a+'|'+pa, B=b+'|'+pb, fwd=A<=B, key=pr+'|'+(fwd?A+'|'+B:B+'|'+A);
+      let c=conv.get(key); if(!c){ c={pr,iv,a:fwd?a:b,pa:fwd?pa:pb,b:fwd?b:a,pb:fwd?pb:pa,pk:0,ab:0,ba:0,t0:p.ts,t1:p.ts,stream:s.tcp?f['tcp.stream']:s.udp?f['udp.stream']:null}; conv.set(key,c); }
+      c.pk++; if(fwd) c.ab+=p.len; else c.ba+=p.len; c.t1=p.ts; }
+    if(f['dns.qry.name']){ const qn=f['dns.qry.name'], qt=f['dns.qry.type']; qn.forEach((n,k)=>{ const key=n+'|'+qt[k]; let e=dnsm.get(key); if(!e){ e={name:n,t:qt[k],q:0,r:0,ans:new Set(),err:''}; dnsm.set(key,e); }
+      if(f['dns.flags.response']){ e.r++; for(const a of (f['dns.a']||[]).concat(f['dns.aaaa']||[],f['dns.cname']||[])) e.ans.add(a); if(f['dns.flags.rcode']) e.err=RCODE[f['dns.flags.rcode']]||'Error'; } else e.q++; });
+      if(f['dns.flags.response']&&f['dns.flags.rcode']) ex.dnserr++; }
+    if(f['tls.sni']) inc(hostm,f['tls.sni']+'|TLS server name',p.len); if(f['http.host']&&f['http.request']) inc(hostm,f['http.host']+'|HTTP Host',p.len);
+    if(f['tcp.analysis.retransmission']) ex.retrans++; if(s.tcp&&(s.tcp.fl&4)) ex.rst++; if(f['tcp.analysis.zero_window']) ex.zw++;
+    if(f['icmp.type']===3||f['icmpv6.type']===1) ex.unreach++; if(f.malformed) ex.malformed++; if(p.caplen<p.len) ex.trunc++;
+  }
+  return {n:V.length,bytes,tmin,tmax,proto,ep,conv,dnsm,hostm,ex};
+}
+function renderStats(){
+  STATE.statsDirty=false; const S=computeStats(); const root=els.stats;
+  if(!S.n){ root.innerHTML=`<p class="empty">${STATE.packets.length?'No packets match the current filter, so there is nothing to summarize.':'Open a capture to see its statistics.'}</p>`; return; }
+  const dur=Math.max(0,S.tmax-S.tmin);
+  const scope=STATE.filter?`Figures cover the ${fmtNum(S.n)} packets matching <code class="mono">${esc(STATE.filter)}</code>, out of ${fmtNum(STATE.packets.length)}.`:`Figures cover all ${fmtNum(S.n)} packets in the capture. Apply a filter to narrow them. Click any row to filter to it.`;
+  const tile=(k,v)=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`;
+  const protos=[...S.proto.entries()].sort((a,b)=>b[1].pk-a[1].pk); const pmax=protos[0][1].pk;
+  const eps=[...S.ep.values()].sort((a,b)=>(b.tx+b.rx)-(a.tx+a.rx)).slice(0,12); const emax=eps.length?eps[0].tx+eps[0].rx:1;
+  const convs=[...S.conv.values()].sort((a,b)=>(b.ab+b.ba)-(a.ab+a.ba)).slice(0,60);
+  const dnsl=[...S.dnsm.values()].sort((a,b)=>(b.q+b.r)-(a.q+a.r)).slice(0,40);
+  const hosts=[...S.hostm.entries()].sort((a,b)=>b[1].pk-a[1].pk).slice(0,30);
+  const X=S.ex; const expert=[
+    ['crit','TCP resets (RST)',X.rst,'tcp.flags.rst==1'],['warn','TCP retransmissions',X.retrans,'tcp.analysis.retransmission'],['warn','TCP zero window',X.zw,'tcp.analysis.zero_window'],
+    ['warn','DNS error responses',X.dnserr,'dns.flags.rcode != 0'],['warn','ICMP destination unreachable',X.unreach,'icmp.type==3 || icmpv6.type==1'],['crit','Malformed packets',X.malformed,'malformed'],['note','Packets cut short by the capture snap length',X.trunc,null]];
+  const qf=(f,v)=>`${f} == ${/^[\w.:\-\/]+$/.test(String(v))?v:'"'+String(v).replace(/"/g,'\\"')+'"'}`;
+  root.innerHTML=`<p class="stats-note">${scope}</p>
+  <div class="tiles">${tile('Packets',fmtNum(S.n))}${tile('Bytes on wire',fmtBytes(S.bytes))}${tile('Duration',fmtDur(dur))}${tile('Average rate',dur>0?(S.n/dur).toFixed(1)+' pkt/s':'n/a')}${tile('Average throughput',dur>0?fmtRate(S.bytes*8/dur):'n/a')}${tile('Avg packet size',fmtNum(Math.round(S.bytes/S.n))+' B')}</div>
+  <div class="grid">
+    <section class="card wide"><h3><span class="grow">Traffic over time</span><span class="seg" id="chartSeg"><button data-m="pk" aria-pressed="${STATE.chartMode==='pk'}">Packets</button><button data-m="b" aria-pressed="${STATE.chartMode==='b'}">Bytes</button></span></h3>
+      <div class="chartwrap"><canvas id="chart" aria-label="Traffic over time chart"></canvas><div class="tip" id="tip" hidden></div></div><p class="hint" id="chartHint"></p></section>
+    <section class="card"><h3>Protocols <span class="muted" style="font-weight:400">(highest decoded layer)</span></h3><div class="tscroll"><table class="t"><thead><tr><th>Protocol</th><th class="barcell"></th><th class="num">Packets</th><th class="num">%</th><th class="num">Bytes</th></tr></thead><tbody>
+      ${protos.map(([k,v])=>`<tr class="click" data-f="${esc(PROTO_FILTER[k]||k.toLowerCase().split(' ')[0])}"><td>${esc(k)}</td><td class="barcell"><div class="bar" style="width:${(100*v.pk/pmax).toFixed(1)}%"></div></td><td class="num">${fmtNum(v.pk)}</td><td class="num">${(100*v.pk/S.n).toFixed(1)}</td><td class="num">${fmtBytes(v.b)}</td></tr>`).join('')}</tbody></table></div></section>
+    <section class="card"><h3>Things to look at</h3><div class="exp">${expert.map(([sev,l,c,f])=>`<button ${c&&f?`data-f="${esc(f)}"`:'disabled'}><span class="sev ${c?sev:'ok'}">${c?{crit:'Error',warn:'Warning',note:'Note'}[sev]:'Clear'}</span><span class="lbl">${esc(l)}</span><span class="cnt">${fmtNum(c)}</span></button>`).join('')}</div></section>
+    <section class="card"><h3>Top endpoints</h3><div class="tscroll"><table class="t"><thead><tr><th>Address</th><th class="barcell"></th><th class="num">Packets</th><th class="num">Sent</th><th class="num">Received</th></tr></thead><tbody>
+      ${eps.map(e=>`<tr class="click" data-f="${esc(e.iv+'.addr == '+e.addr)}"><td title="${esc(e.addr)}">${esc(e.addr)}</td><td class="barcell"><div class="bar" style="width:${(100*(e.tx+e.rx)/emax).toFixed(1)}%"></div></td><td class="num">${fmtNum(e.pk)}</td><td class="num">${fmtBytes(e.tx)}</td><td class="num">${fmtBytes(e.rx)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No IP traffic.</td></tr>'}</tbody></table></div></section>
+    <section class="card"><h3>Hosts named in TLS and HTTP</h3><div class="tscroll"><table class="t"><thead><tr><th>Host</th><th>Seen in</th><th class="num">Packets</th></tr></thead><tbody>
+      ${hosts.map(([k,v])=>{ const [h,src]=k.split('|'); return `<tr class="click" data-f="${esc(qf(src==='HTTP Host'?'http.host':'tls.sni',h))}"><td title="${esc(h)}">${esc(h)}</td><td class="muted" style="font-family:var(--font-ui)">${src}</td><td class="num">${v.pk}</td></tr>`; }).join('')||'<tr><td colspan="3" class="muted" style="font-family:var(--font-ui)">No TLS Client Hellos or HTTP requests.</td></tr>'}</tbody></table></div></section>
+    <section class="card wide"><h3>DNS lookups</h3><div class="tscroll"><table class="t"><thead><tr><th>Name</th><th>Type</th><th class="num">Queries</th><th class="num">Responses</th><th>Answers</th><th>Status</th></tr></thead><tbody>
+      ${dnsl.map(e=>`<tr class="click" data-f="${esc(qf('dns.qry.name',e.name))}"><td title="${esc(e.name)}">${esc(e.name)}</td><td>${esc(RRT[e.t]||e.t)}</td><td class="num">${e.q}</td><td class="num">${e.r}</td><td title="${esc([...e.ans].join(', '))}">${esc([...e.ans].join(', ')||(e.r?'(none)':''))}</td><td>${e.err?`<span class="sev warn">${esc(e.err)}</span>`:e.r?'<span class="sev ok">Answered</span>':'<span class="sev note">No reply</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="muted" style="font-family:var(--font-ui)">No DNS traffic.</td></tr>'}</tbody></table></div></section>
+    <section class="card wide"><h3>Conversations <span class="muted" style="font-weight:400">(by bytes, top ${convs.length})</span></h3><div class="tscroll"><table class="t"><thead><tr><th>Protocol</th><th>Address A</th><th class="num">Port A</th><th>Address B</th><th class="num">Port B</th><th class="num">Packets</th><th class="num">A → B</th><th class="num">B → A</th><th class="num">Start</th><th class="num">Duration</th></tr></thead><tbody>
+      ${convs.map(c=>{ const f=c.stream!=null?`${c.pr.toLowerCase()}.stream == ${c.stream}`:`${c.iv}.addr == ${c.a} && ${c.iv}.addr == ${c.b}`; return `<tr class="click" data-f="${esc(f)}"><td>${c.pr}</td><td title="${esc(c.a)}">${esc(c.a)}</td><td class="num">${c.pa??''}</td><td title="${esc(c.b)}">${esc(c.b)}</td><td class="num">${c.pb??''}</td><td class="num">${fmtNum(c.pk)}</td><td class="num">${fmtBytes(c.ab)}</td><td class="num">${fmtBytes(c.ba)}</td><td class="num">${(c.t0-T0).toFixed(3)}</td><td class="num">${(c.t1-c.t0).toFixed(3)} s</td></tr>`; }).join('')||'<tr><td colspan="10" class="muted">No IP conversations.</td></tr>'}</tbody></table></div></section>
+  </div>`;
+  root.querySelectorAll('[data-f]').forEach(el=>el.addEventListener('click',()=>setFilter(el.dataset.f)));
+  $('#chartSeg').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; STATE.chartMode=b.dataset.m; $('#chartSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b)); drawChart(); });
+  buildChart(S); drawChart(); bindChart();
+}
+function niceStep(x){ const e=Math.pow(10,Math.floor(Math.log10(x))); const f=x/e; return (f<=1?1:f<=2?2:f<=5?5:10)*e; }
+function buildChart(S){
+  const dur=Math.max(0,S.tmax-S.tmin); const steps=[0.001,0.002,0.005,0.01,0.02,0.05,0.1,0.2,0.5,1,2,5,10,15,30,60,120,300,600,900,1800,3600,7200,21600,43200,86400];
+  let size=steps.find(s=>dur/s<=72)||86400; if(dur===0) size=1; const n=Math.max(1,Math.ceil((dur+1e-9)/size));
+  const pk=new Array(n).fill(0), b=new Array(n).fill(0); const P=STATE.packets;
+  for(const i of STATE.view){ const p=P[i]; let k=Math.floor((p.ts-S.tmin)/size); if(k>=n) k=n-1; pk[k]++; b[k]+=p.len; }
+  CHART={pk,b,size,start:S.tmin-T0,n,hover:-1};
+  $('#chartHint').textContent=`Each bar is ${size<1?(size*1000)+' ms':size<60?size+' s':size<3600?(size/60)+' min':(size/3600)+' h'}. Time is in seconds since the first packet. Click a bar to filter to that interval.`;
+}
+function drawChart(){
+  const cv=$('#chart'); if(!cv||!CHART) return; const dpr=window.devicePixelRatio||1; const W=cv.clientWidth, H=220; if(!W) return;
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  const css=getComputedStyle(document.documentElement), col=k=>css.getPropertyValue(k).trim();
+  const vals=STATE.chartMode==='b'?CHART.b:CHART.pk; const max=Math.max(1,...vals);
+  let step=niceStep(max/4); if(STATE.chartMode==='pk') step=Math.max(1,step); const top=step*Math.ceil(max/step);
+  const fmtY=v=>STATE.chartMode==='b'?fmtBytes(v):fmtNum(v);
+  g.font='11px "IBM Plex Mono", ui-monospace, monospace'; const lw=Math.max(...Array.from({length:Math.round(top/step)+1},(_,k)=>g.measureText(fmtY(k*step)).width));
+  const L=Math.ceil(lw)+12, R=8, Tp=10, B=24, pw=W-L-R, ph=H-Tp-B; CHART.geo={L,pw,Tp,ph,top};
+  g.textAlign='right'; g.textBaseline='middle';
+  for(let v=0;v<=top+1e-9;v+=step){ const y=Tp+ph*(1-v/top); g.strokeStyle=col('--line'); g.lineWidth=1; g.beginPath(); g.moveTo(L,Math.round(y)+.5); g.lineTo(W-R,Math.round(y)+.5); g.stroke(); g.fillStyle=col('--muted'); g.fillText(fmtY(v),L-6,y); }
+  const bw=pw/CHART.n, gap=bw>6?Math.min(2,bw*.15):0;
+  for(let i=0;i<CHART.n;i++){ const v=vals[i]; if(!v) continue; const h=Math.max(1,ph*v/top); g.fillStyle=col('--accent'); g.globalAlpha=CHART.hover===i?1:.78; g.fillRect(L+i*bw+gap/2,Tp+ph-h,Math.max(1,bw-gap),h); }
+  g.globalAlpha=1; g.fillStyle=col('--muted'); g.textAlign='center'; g.textBaseline='top';
+  const every=Math.max(1,Math.ceil(CHART.n/Math.max(2,Math.floor(pw/80)))); const dec=CHART.size<0.01?3:CHART.size<1?2:0;
+  for(let i=0;i<=CHART.n;i+=every){ const x=L+i*bw; g.fillText((CHART.start+i*CHART.size).toFixed(dec)+'s',Math.min(Math.max(x,L+12),W-R-14),Tp+ph+6); }
+  g.strokeStyle=col('--muted'); g.beginPath(); g.moveTo(L,Tp+ph+.5); g.lineTo(W-R,Tp+ph+.5); g.stroke();
+}
+function bindChart(){
+  const cv=$('#chart'), tip=$('#tip'); const at=e=>{ const r=cv.getBoundingClientRect(); const x=e.clientX-r.left; const {L,pw}=CHART.geo; if(x<L||x>L+pw) return -1; return Math.min(CHART.n-1,Math.floor((x-L)/(pw/CHART.n))); };
+  cv.addEventListener('mousemove',e=>{ const i=at(e); if(i!==CHART.hover){ CHART.hover=i; drawChart(); } if(i<0){ tip.hidden=true; return; } const a=CHART.start+i*CHART.size; const {L,pw}=CHART.geo;
+    tip.hidden=false; tip.textContent=`${a.toFixed(3)}–${(a+CHART.size).toFixed(3)} s · ${fmtNum(CHART.pk[i])} pkts · ${fmtBytes(CHART.b[i])}`; tip.style.left=Math.min(Math.max(L+(i+.5)*pw/CHART.n,120),cv.clientWidth-120)+'px'; tip.style.top=(CHART.geo.Tp+8)+'px'; });
+  cv.addEventListener('mouseleave',()=>{ tip.hidden=true; CHART.hover=-1; drawChart(); });
+  cv.addEventListener('click',e=>{ const i=at(e); if(i<0||!(CHART.pk[i])) return; const a=CHART.start+i*CHART.size, b=a+CHART.size; const base=STATE.filter?`(${STATE.filter}) && `:''; setFilter(`${base}frame.time_relative >= ${a.toFixed(6)} && frame.time_relative < ${b.toFixed(6)}`); });
+}
+window.addEventListener('resize',()=>{ if(STATE.tab==='stats') drawChart(); });
+new MutationObserver(()=>{ if(STATE.tab==='stats') drawChart(); }).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',()=>{ if(STATE.tab==='stats') drawChart(); });
+
+/* ---------- status, tabs, misc ---------- */
+function updateStatus(){ const P=STATE.packets, V=STATE.view; const bytes=P.reduce((a,p)=>a+p.len,0);
+  els.status.innerHTML=`<span>Packets: ${fmtNum(P.length)}</span><span>Displayed: ${fmtNum(V.length)}${P.length?' ('+(100*V.length/P.length).toFixed(1)+'%)':''}</span><span>Size: ${fmtBytes(bytes)}</span><span>Decoded in ${STATE.loadMs.toFixed(0)} ms</span><span style="flex:1"></span><span>Files are decoded in your browser. Nothing is uploaded.</span>`; }
+function switchTab(t){ STATE.tab=t; document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t)); $('#packetsView').hidden=t!=='packets'; els.stats.hidden=t!=='stats';
+  if(t==='stats'){ if(STATE.statsDirty) renderStats(); else drawChart(); } else renderList(); }
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+$('#timeFmt').addEventListener('change',e=>{ STATE.timeMode=e.target.value; renderList(); });
+$('#openBtn').addEventListener('click',()=>$('#fileInput').click());
+$('#fileInput').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) openFile(f); e.target.value=''; });
+$('#sampleBtn').addEventListener('click',()=>{ els.filter.value=''; loadSample(); });
+$('#pasteBtn').addEventListener('click',showPaste);
+$('#fhelp').addEventListener('click',showHelp);
+$('#fapply').addEventListener('click',()=>applyFilter(els.filter.value));
+$('#fclear').addEventListener('click',()=>{ els.filter.value=''; applyFilter(''); els.filter.focus(); });
+els.filter.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); applyFilter(els.filter.value); } });
+let vt=0; els.filter.addEventListener('input',()=>{ clearTimeout(vt); vt=setTimeout(validateFilter,180); });
+$('#chips').addEventListener('click',e=>{ const b=e.target.closest('[data-f]'); if(b) setFilter(b.dataset.f); });
+$('#copyCsv').addEventListener('click',async()=>{
+  const q=v=>'"'+String(v).replace(/"/g,'""')+'"'; const P=STATE.packets; const lines=['"No.","Time","Source","Destination","Protocol","Length","Info"'];
+  STATE.view.slice(0,200000).forEach((i,k)=>{ const p=P[i]; lines.push([p.no,fmtTime(p,k),p.s.src,p.s.dst,p.s.proto,p.len,p.s.info].map(q).join(',')); });
+  const txt=lines.join('\n');
+  try{ await navigator.clipboard.writeText(txt); toast(`Copied ${fmtNum(STATE.view.length)} rows as CSV.`); }
+  catch(_){ openModal('Copy as CSV',`<p style="margin-top:0">Your browser blocked clipboard access. Select the text below and copy it.</p><textarea readonly id="csvOut">${esc(txt)}</textarea>`); const ta=$('#csvOut'); ta.focus(); ta.select(); }
+});
+/* splitter */
+(()=>{ const sp=$('#split'), pv=$('#packetsView'); let y0=0,h0=0,drag=false; const listPane=pv.firstElementChild;
+  sp.addEventListener('pointerdown',e=>{ drag=true; y0=e.clientY; h0=listPane.getBoundingClientRect().height; sp.setPointerCapture(e.pointerId); });
+  sp.addEventListener('pointermove',e=>{ if(!drag) return; const total=pv.clientHeight; const h=Math.max(120,Math.min(total-200,h0+e.clientY-y0)); pv.style.setProperty('--split',h+'px'); });
+  sp.addEventListener('pointerup',()=>{ drag=false; });
+  sp.addEventListener('keydown',e=>{ if(e.key!=='ArrowUp'&&e.key!=='ArrowDown') return; e.preventDefault(); const h=listPane.getBoundingClientRect().height+(e.key==='ArrowUp'?-30:30); pv.style.setProperty('--split',Math.max(120,Math.min(pv.clientHeight-200,h))+'px'); });
+})();
+/* drag and drop */
+(()=>{ const drop=$('#drop'); let depth=0; const hasFiles=e=>e.dataTransfer&&[...e.dataTransfer.types].includes('Files');
+  document.addEventListener('dragenter',e=>{ if(!hasFiles(e)) return; e.preventDefault(); depth++; drop.hidden=false; });
+  document.addEventListener('dragover',e=>{ if(hasFiles(e)) e.preventDefault(); });
+  document.addEventListener('dragleave',()=>{ depth=Math.max(0,depth-1); if(!depth) drop.hidden=true; });
+  document.addEventListener('drop',e=>{ if(!hasFiles(e)) return; e.preventDefault(); depth=0; drop.hidden=true; const f=e.dataTransfer.files[0]; if(f) openFile(f); });
+})();
+
+loadSample();
+</script>
+</body>
+</html>
