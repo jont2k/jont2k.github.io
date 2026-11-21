@@ -119,6 +119,20 @@
   .badge{position:absolute;top:8px;left:8px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 8px;border-radius:99px;box-shadow:0 2px 6px rgba(0,0,0,.5)}
   .badge.reprint{background:#2b3446;color:#cfd8ea;border:1px solid #4a566b}
   .badge.newc{background:#1f3a2c;color:#7fe0a8;border:1px solid #3d7a57}
+  .badge.alt{left:auto;right:8px;background:#3a2f14;color:var(--gold2);border:1px solid rgba(212,168,75,.6)}
+  .card.multi{box-shadow:4px 4px 0 -1px var(--panel2),4px 4px 0 0 var(--line),8px 8px 0 -1px var(--panel2),8px 8px 0 0 var(--line)}
+  .pstrip{grid-column:1/-1;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-right:24px}
+  .pstrip .lbl{font-size:12px;color:var(--muted);white-space:nowrap}
+  .pthumbs{display:flex;gap:8px;overflow-x:auto;padding:2px;flex:1}
+  .pthumb{flex:none;width:74px;background:none;border:2px solid transparent;border-radius:8px;padding:0;text-align:center;opacity:.7}
+  .pthumb img{width:100%;border-radius:5px;display:block}
+  .pthumb span{display:block;font-size:10px;color:var(--muted);line-height:1.2;margin-top:3px;white-space:normal}
+  .pthumb.on{border-color:var(--gold);opacity:1}
+  .pthumb:hover{opacity:1}
+  .navbtn{flex:none;width:34px;height:34px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);font-size:18px;line-height:1}
+  .navbtn:hover{border-color:var(--gold)}
+  .navbtn:disabled{opacity:.3;cursor:default}
+  .vlabel{font-size:12px;font-weight:600;color:var(--gold2);background:rgba(212,168,75,.1);border:1px solid rgba(212,168,75,.35);border-radius:99px;padding:2px 10px;display:inline-block;margin-bottom:8px}
   .printbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:12px 0}
   .printbox .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:600}
   .printbox .plist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
@@ -283,12 +297,15 @@ function setCardHTML(s){
   </div>`;
 }
 
-function cardHTML(c, {showSet=false}={}){
+function cardHTML(e, {showSet=false}={}){
+  const c = e.primary;
   const img = cardImg(c,'normal');
-  const rd = revealDate(c);
-  const src = c.preview && c.preview.source;
-  return `<div class="card" data-id="${esc(c.id)}">
-    <div class="imgwrap">${img?`<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy">`:`<div class="ph">${esc(c.name)}</div>`}${c.reprint?`<span class="badge reprint" title="This card has been printed before">Reprint</span>`:`<span class="badge newc" title="First time this card has been printed">New</span>`}</div>
+  const rd = e.reveal;
+  const srcCard = e.prints.find(p=>revealDate(p)===rd) || c;
+  const src = srcCard.preview && srcCard.preview.source;
+  const alts = e.prints.length-1;
+  return `<div class="card${alts?' multi':''}" data-id="${esc(c.id)}">
+    <div class="imgwrap">${img?`<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy">`:`<div class="ph">${esc(c.name)}</div>`}${e.reprint?`<span class="badge reprint" title="This card has been printed before">Reprint</span>`:`<span class="badge newc" title="First time this card has been printed">New</span>`}${alts?`<span class="badge alt" title="${esc(e.prints.slice(1).map(printLabel).join(', '))}">+${alts} alt art${alts===1?'':'s'}</span>`:''}</div>
     <div class="cinfo">
       <div class="cname"><span class="rar r-${esc(c.rarity)}" title="${esc(c.rarity)}"></span>${esc(c.name)}</div>
       ${showSet?`<div class="csub">${esc(c.set_name)} · #${esc(c.collector_number)}</div>`:`<div class="csub">#${esc(c.collector_number)} · ${esc(c.type_line||'')}</div>`}
@@ -300,12 +317,54 @@ function cardHTML(c, {showSet=false}={}){
 const CARD_INDEX = new Map();
 function indexCards(cards){ cards.forEach(c=>CARD_INDEX.set(c.id,c)); }
 
-function groupByReveal(cards){
-  const groups = new Map();
+/* Combine printings of the same card within the same set (alt arts) */
+const GROUP_OF = new Map();   // any printing id -> ordered printings in that set
+const cnNum = c => parseInt(c.collector_number)||0;
+const cmpCN = (a,b) => cnNum(a)-cnNum(b) || String(a.collector_number).localeCompare(String(b.collector_number));
+function isPlain(c){
+  return c.border_color!=='borderless' && !c.full_art && !(c.promo_types||[]).length
+    && !(c.frame_effects||[]).some(f=>['showcase','extendedart','inverted','etched'].includes(f));
+}
+function bundle(cards){
+  const m = new Map(), order = [];
   for (const c of cards){
-    const k = revealDate(c) || 'none';
+    const k = c.set + '|' + (c.oracle_id || c.name);
+    if (!m.has(k)){ m.set(k, []); order.push(k); }
+    m.get(k).push(c);
+  }
+  return order.map(k=>{
+    const sorted = m.get(k).sort(cmpCN);
+    const primary = sorted.find(isPlain) || sorted[0];
+    const prints = [primary, ...sorted.filter(p=>p!==primary)];
+    prints.forEach(p=>GROUP_OF.set(p.id, prints));
+    const dates = prints.map(revealDate).filter(Boolean).sort();
+    return { primary, prints, reveal: dates[0]||null, reprint: prints.every(p=>p.reprint) };
+  });
+}
+const PROMO_LABELS = {serialized:'Serialized',textured:'Textured',galaxyfoil:'Galaxy Foil',surgefoil:'Surge Foil',halofoil:'Halo Foil',
+  raisedfoil:'Raised Foil',confettifoil:'Confetti Foil',doublerainbow:'Double Rainbow',stepandcompleat:'Step-and-Compleat',fracturefoil:'Fracture Foil',
+  manafoil:'Mana Foil',rainbowfoil:'Rainbow Foil',oilslick:'Oil Slick',neonink:'Neon Ink',prerelease:'Prerelease',buyabox:'Buy-a-Box',
+  bundle:'Bundle',promopack:'Promo Pack',datestamped:'Date-stamped',stamped:'Stamped',japanshowcase:'Japan Showcase',poster:'Poster',
+  firstplacefoil:'First Place Foil',dossier:'Dossier',ripplefoil:'Ripple Foil',dragonscalefoil:'Dragonscale Foil',singularityfoil:'Singularity Foil'};
+function printLabel(c){
+  const L = [], fe = c.frame_effects||[];
+  if (c.border_color==='borderless') L.push('Borderless');
+  if (fe.includes('showcase')) L.push('Showcase');
+  if (fe.includes('extendedart')) L.push('Extended Art');
+  if (c.full_art && c.border_color!=='borderless') L.push('Full Art');
+  if (fe.includes('inverted')) L.push('Inverted');
+  if (fe.includes('etched') || ((c.finishes||[]).length===1 && c.finishes[0]==='etched')) L.push('Foil Etched');
+  (c.promo_types||[]).forEach(t=>{ if (PROMO_LABELS[t] && !L.includes(PROMO_LABELS[t])) L.push(PROMO_LABELS[t]); });
+  if (c.variation && !L.length) L.push('Variant');
+  return L.length ? L.join(' · ') : 'Regular';
+}
+
+function groupByReveal(entries){
+  const groups = new Map();
+  for (const e of entries){
+    const k = e.reveal || 'none';
     if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(c);
+    groups.get(k).push(e);
   }
   const keys = [...groups.keys()].filter(k=>k!=='none').sort().reverse();
   if (groups.has('none')) keys.push('none');
@@ -317,9 +376,9 @@ function dayGroupsHTML(groups, opts){
     <div class="dayhead">
       <h3>${g.key==='none'?'No reveal date recorded':fmtLong(g.key)}</h3>
       ${g.key!=='none'?`<span class="rel">${relDay(g.key)}</span>`:''}
-      <span class="cnt">${g.cards.length} card${g.cards.length===1?'':'s'}${(()=>{const r=g.cards.filter(c=>c.reprint).length;return ` · ${g.cards.length-r} new · ${r} reprint${r===1?'':'s'}`;})()}</span>
+      <span class="cnt">${g.cards.length} card${g.cards.length===1?'':'s'}${(()=>{const r=g.cards.filter(e=>e.reprint).length;return ` · ${g.cards.length-r} new · ${r} reprint${r===1?'':'s'}`;})()}</span>
     </div>
-    <div class="cards">${g.cards.map(c=>cardHTML(c,opts)).join('')}</div>
+    <div class="cards">${g.cards.map(e=>cardHTML(e,opts)).join('')}</div>
   </section>`).join('');
 }
 
@@ -374,8 +433,8 @@ async function viewFeed(){
 
   const body = $('#feedbody');
   const render = ()=>{
-    let cards = filterCards(st.cards, st.f);
-    if (st.hideNoDate) cards = cards.filter(revealDate);
+    let cards = bundle(filterCards(st.cards, st.f));
+    if (st.hideNoDate) cards = cards.filter(e=>e.reveal);
     if (!cards.length){ body.innerHTML = `<div class="empty">No cards match.</div>`; return; }
     body.innerHTML = `<p class="status" style="margin:0 0 4px">${st.cards.length} of ${st.total} printings released on or after ${fmtDate(cutoff())}, newest reveals first.</p>`
       + dayGroupsHTML(groupByReveal(cards), {showSet:true})
@@ -511,14 +570,14 @@ async function viewSet(code){
 
   const body = $('#setbody');
   const render = ()=>{
-    const cards = filterCards(st.cards, st.f);
+    const cards = bundle(filterCards(st.cards, st.f));
     if (!st.cards.length){ body.innerHTML = `<div class="empty">No cards from this set are on Scryfall yet.</div>`; return; }
     if (!cards.length){ body.innerHTML = `<div class="empty">No cards match.</div>`; return; }
     if (st.group==='reveal'){
       body.innerHTML = dayGroupsHTML(groupByReveal(cards));
     } else {
-      const sorted = [...cards].sort((a,b)=>(parseInt(a.collector_number)||0)-(parseInt(b.collector_number)||0) || a.collector_number.localeCompare(b.collector_number));
-      body.innerHTML = `<div class="cards">${sorted.map(c=>cardHTML(c)).join('')}</div>`;
+      const sorted = [...cards].sort((a,b)=>cmpCN(a.primary,b.primary));
+      body.innerHTML = `<div class="cards">${sorted.map(e=>cardHTML(e)).join('')}</div>`;
     }
   };
   $('#grp').addEventListener('click', e=>{
@@ -542,9 +601,11 @@ async function viewSet(code){
     extra.push(`<div class="stat"><b>${r.cards.length}${s.count?` / ${s.count}`:''}</b><span>On Scryfall${n>0?' (revealed)':''}</span>
       ${s.count?`<div class="bar"><i style="width:${Math.min(100,Math.round(r.cards.length/s.count*100))}%"></i></div>`:''}</div>`);
     if (r.cards.length) extra.push(`<div class="stat"><b>${withDate}</b><span>With reveal date</span></div>`);
-    if (r.cards.length){ const rp=r.cards.filter(c=>c.reprint).length;
-      extra.push(`<div class="stat"><b>${r.cards.length-rp}</b><span>New cards</span></div>`);
-      extra.push(`<div class="stat"><b>${rp}</b><span>Reprints</span></div>`); }
+    if (r.cards.length){ const ents=bundle(r.cards); const rp=ents.filter(e=>e.reprint).length;
+      extra.push(`<div class="stat"><b>${ents.length}</b><span>Unique cards</span></div>`);
+      extra.push(`<div class="stat"><b>${ents.length-rp}</b><span>New cards</span></div>`);
+      extra.push(`<div class="stat"><b>${rp}</b><span>Reprints</span></div>`);
+      extra.push(`<div class="stat"><b>${r.cards.length-ents.length}</b><span>Alt-art printings</span></div>`); }
     $('#sstats').insertAdjacentHTML('beforeend', extra.join(''));
     if (!withDate) { st.group='number'; [...$('#grp').children].forEach(x=>x.classList.toggle('on',x.dataset.g==='number')); }
     render();
@@ -552,8 +613,13 @@ async function viewSet(code){
 }
 
 /* ---------- card modal ---------- */
+let MODAL_GROUP = null, MODAL_IDX = 0;
 function openCard(id){
   const c = CARD_INDEX.get(id); if (!c) return;
+  const group = GROUP_OF.get(id) || [c];
+  const gi = Math.max(0, group.indexOf(c));
+  MODAL_GROUP = group; MODAL_IDX = gi;
+  const groupReprint = group.every(p=>p.reprint);
   const faces = c.card_faces && c.card_faces.length ? c.card_faces : [c];
   const imgs = (c.image_uris ? [c.image_uris.large] : faces.map(f=>f.image_uris&&f.image_uris.large)).filter(Boolean);
   const rd = revealDate(c);
@@ -562,8 +628,16 @@ function openCard(id){
   const price = c.prices && (c.prices.usd ? `$${c.prices.usd}` : c.prices.usd_foil ? `$${c.prices.usd_foil} (foil)` : null);
   $('#mbox').innerHTML = `
     <button class="x" aria-label="Close">×</button>
+    ${group.length>1?`<div class="pstrip">
+      <button class="navbtn" data-nav="-1" ${gi===0?'disabled':''} aria-label="Previous printing">‹</button>
+      <div class="pthumbs">${group.map((g,i)=>`<button class="pthumb${i===gi?' on':''}" data-pid="${esc(g.id)}" title="${esc(printLabel(g))} · #${esc(g.collector_number)}">
+        ${cardImg(g,'small')?`<img src="${esc(cardImg(g,'small'))}" alt="" loading="lazy">`:''}<span>${esc(printLabel(g))}</span></button>`).join('')}</div>
+      <button class="navbtn" data-nav="1" ${gi===group.length-1?'disabled':''} aria-label="Next printing">›</button>
+      <span class="lbl">${gi+1} / ${group.length}</span>
+    </div>`:''}
     <div class="mimgs">${imgs.map(u=>`<img src="${esc(u)}" alt="${esc(c.name)}">`).join('') || `<div class="empty">No image yet</div>`}</div>
     <div>
+      <span class="vlabel">${esc(printLabel(c))} · #${esc(c.collector_number)}</span>
       ${faces.map((f,i)=>`
         <h2 class="mtitle">${esc(f.name)} ${manaHTML(f.mana_cost)}</h2>
         <div class="tline">${esc(f.type_line||'')}${f.power!=null?` · ${esc(f.power)}/${esc(f.toughness)}`:''}${f.loyalty!=null?` · Loyalty ${esc(f.loyalty)}`:''}</div>
@@ -576,7 +650,7 @@ function openCard(id){
           : `<div>No reveal record on Scryfall for this printing.</div>`}
       </div>
       <div class="printbox" id="printbox">
-        <div class="hd">${c.reprint?'<span class="badge reprint" style="position:static">Reprint</span> Printed before':'<span class="badge newc" style="position:static">New</span> First printing of this card'}</div>
+        <div class="hd">${groupReprint?'<span class="badge reprint" style="position:static">Reprint</span> Printed before':'<span class="badge newc" style="position:static">New</span> First printing of this card'}</div>
         <div class="status" id="printhist">Loading printing history…</div>
       </div>
       <dl class="kv">
@@ -591,7 +665,10 @@ function openCard(id){
     </div>`;
   $('#modal').classList.add('open');
   $('#mbox .x').onclick = closeCard;
-  loadPrintHistory(c);
+  $('#mbox').querySelectorAll('.pthumb').forEach(b=>b.onclick=()=>openCard(b.dataset.pid));
+  $('#mbox').querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>stepPrint(+b.dataset.nav));
+  if (group.length>1) { const on=$('#mbox .pthumb.on'); on && on.scrollIntoView && on.scrollIntoView({block:'nearest',inline:'nearest'}); }
+  loadPrintHistory({...c, reprint: groupReprint});
 }
 
 const PRINT_CACHE = new Map();
@@ -629,7 +706,17 @@ async function loadPrintHistory(c){
 }
 function closeCard(){ $('#modal').classList.remove('open'); }
 $('#modal').addEventListener('click', e=>{ if (e.target.id==='modal') closeCard(); });
-document.addEventListener('keydown', e=>{ if (e.key==='Escape') closeCard(); });
+function stepPrint(d){
+  if (!MODAL_GROUP) return;
+  const i = MODAL_IDX + d;
+  if (i>=0 && i<MODAL_GROUP.length) openCard(MODAL_GROUP[i].id);
+}
+document.addEventListener('keydown', e=>{
+  if (e.key==='Escape') closeCard();
+  if (!$('#modal').classList.contains('open')) return;
+  if (e.key==='ArrowRight') stepPrint(1);
+  if (e.key==='ArrowLeft') stepPrint(-1);
+});
 
 /* ---------- global clicks + routing ---------- */
 app.addEventListener('click', e=>{
