@@ -11,6 +11,7 @@ A single-page web app that tracks Magic: The Gathering sets, their release dates
 - **All Sets**: every set, searchable and filterable by product type and year.
 - **Set pages**: release date, first/latest reveal dates, reveal progress (cards revealed vs. set size), and cards grouped by reveal date or collector number.
 - **Card details**: full card image (both faces for double-faced cards), oracle text with mana symbols, reveal date and source link, artist, price.
+- **Reprint tracking**: every card is tagged New or Reprint, with a filter for each. Card details show where a reprint was first printed and its earlier printings.
 
 ## Running
 

@@ -116,6 +116,13 @@
   .kv dt{color:var(--dim)} .kv dd{margin:0}
   .revealbox{background:rgba(212,168,75,.08);border:1px solid rgba(212,168,75,.35);border-radius:10px;padding:12px 14px;margin:12px 0}
   .revealbox b{color:var(--gold2)}
+  .badge{position:absolute;top:8px;left:8px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:3px 8px;border-radius:99px;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+  .badge.reprint{background:#2b3446;color:#cfd8ea;border:1px solid #4a566b}
+  .badge.newc{background:#1f3a2c;color:#7fe0a8;border:1px solid #3d7a57}
+  .printbox{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:12px 0}
+  .printbox .hd{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:600}
+  .printbox .plist{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .printbox .plist a.pill:hover{text-decoration:none;border-color:var(--gold)}
   footer{max-width:1500px;margin:30px auto;padding:0 20px 30px;color:var(--dim);font-size:12px}
   @media (max-width:720px){
     .topin{flex-wrap:wrap;gap:10px}
@@ -281,7 +288,7 @@ function cardHTML(c, {showSet=false}={}){
   const rd = revealDate(c);
   const src = c.preview && c.preview.source;
   return `<div class="card" data-id="${esc(c.id)}">
-    <div class="imgwrap">${img?`<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy">`:`<div class="ph">${esc(c.name)}</div>`}</div>
+    <div class="imgwrap">${img?`<img src="${esc(img)}" alt="${esc(c.name)}" loading="lazy">`:`<div class="ph">${esc(c.name)}</div>`}${c.reprint?`<span class="badge reprint" title="This card has been printed before">Reprint</span>`:`<span class="badge newc" title="First time this card has been printed">New</span>`}</div>
     <div class="cinfo">
       <div class="cname"><span class="rar r-${esc(c.rarity)}" title="${esc(c.rarity)}"></span>${esc(c.name)}</div>
       ${showSet?`<div class="csub">${esc(c.set_name)} · #${esc(c.collector_number)}</div>`:`<div class="csub">#${esc(c.collector_number)} · ${esc(c.type_line||'')}</div>`}
@@ -310,7 +317,7 @@ function dayGroupsHTML(groups, opts){
     <div class="dayhead">
       <h3>${g.key==='none'?'No reveal date recorded':fmtLong(g.key)}</h3>
       ${g.key!=='none'?`<span class="rel">${relDay(g.key)}</span>`:''}
-      <span class="cnt">${g.cards.length} card${g.cards.length===1?'':'s'}</span>
+      <span class="cnt">${g.cards.length} card${g.cards.length===1?'':'s'}${(()=>{const r=g.cards.filter(c=>c.reprint).length;return ` · ${g.cards.length-r} new · ${r} reprint${r===1?'':'s'}`;})()}</span>
     </div>
     <div class="cards">${g.cards.map(c=>cardHTML(c,opts)).join('')}</div>
   </section>`).join('');
@@ -320,6 +327,8 @@ function filterCards(cards, f){
   const q = (f.q||'').toLowerCase().trim();
   return cards.filter(c=>{
     if (f.rarity && f.rarity!=='all' && c.rarity!==f.rarity) return false;
+    if (f.print==='new' && c.reprint) return false;
+    if (f.print==='reprint' && !c.reprint) return false;
     if (f.color && f.color!=='all'){
       const ci = c.color_identity||[];
       if (f.color==='C'){ if (ci.length) return false; }
@@ -335,6 +344,7 @@ function filterCards(cards, f){
 }
 const FILTER_CONTROLS = (f)=>`
   <input type="search" id="fq" placeholder="Filter by name, type or rules text…" value="${esc(f.q||'')}">
+  <select id="fprint">${[['all','New + reprints'],['new','New cards only'],['reprint','Reprints only']].map(([v,l])=>`<option value="${v}" ${f.print===v?'selected':''}>${l}</option>`).join('')}</select>
   <select id="frar">${['all','common','uncommon','rare','mythic','special','bonus'].map(r=>`<option value="${r}" ${f.rarity===r?'selected':''}>${r==='all'?'All rarities':r[0].toUpperCase()+r.slice(1)}</option>`).join('')}</select>
   <select id="fcol">${[['all','All colors'],['W','White'],['U','Blue'],['B','Black'],['R','Red'],['G','Green'],['M','Multicolor'],['C','Colorless']].map(([v,l])=>`<option value="${v}" ${f.color===v?'selected':''}>${l}</option>`).join('')}</select>`;
 
@@ -342,6 +352,7 @@ function bindFilters(f, rerender){
   const deb = (fn)=>{ let t; return ()=>{ clearTimeout(t); t=setTimeout(fn,150); }; };
   $('#fq').addEventListener('input', deb(()=>{ f.q=$('#fq').value; rerender(); }));
   $('#frar').addEventListener('change', ()=>{ f.rarity=$('#frar').value; rerender(); });
+  $('#fprint').addEventListener('change', ()=>{ f.print=$('#fprint').value; rerender(); });
   $('#fcol').addEventListener('change', ()=>{ f.color=$('#fcol').value; rerender(); });
 }
 
@@ -350,7 +361,7 @@ let viewToken = 0;
 
 async function viewFeed(){
   const tok = ++viewToken;
-  const st = { days: 45, f:{q:'',rarity:'all',color:'all'}, hideNoDate:true, cards:[], next:null, total:0 };
+  const st = { days: 45, f:{q:'',rarity:'all',color:'all',print:'all'}, hideNoDate:true, cards:[], next:null, total:0 };
   try{ const sv = JSON.parse(localStorage.getItem('mtgtrk_feed')||'null'); if (sv && sv.days) st.days=sv.days; }catch(e){}
 
   app.innerHTML = `
@@ -470,7 +481,7 @@ async function viewSet(code){
   let s;
   try{ await loadSets(); s = setByCode(code); }catch(e){ app.innerHTML = errHTML(e); return; }
   if (!s){ app.innerHTML = `<div class="empty">Set “${esc(code)}” not found.</div>`; return; }
-  const st = { group:'reveal', f:{q:'',rarity:'all',color:'all'}, cards:[] };
+  const st = { group:'reveal', f:{q:'',rarity:'all',color:'all',print:'all'}, cards:[] };
   const n = s.released ? daysBetween(TODAY, s.released) : null;
   const parent = s.parent ? setByCode(s.parent) : null;
   const children = SETS.filter(x=>x.parent===s.code);
@@ -531,6 +542,9 @@ async function viewSet(code){
     extra.push(`<div class="stat"><b>${r.cards.length}${s.count?` / ${s.count}`:''}</b><span>On Scryfall${n>0?' (revealed)':''}</span>
       ${s.count?`<div class="bar"><i style="width:${Math.min(100,Math.round(r.cards.length/s.count*100))}%"></i></div>`:''}</div>`);
     if (r.cards.length) extra.push(`<div class="stat"><b>${withDate}</b><span>With reveal date</span></div>`);
+    if (r.cards.length){ const rp=r.cards.filter(c=>c.reprint).length;
+      extra.push(`<div class="stat"><b>${r.cards.length-rp}</b><span>New cards</span></div>`);
+      extra.push(`<div class="stat"><b>${rp}</b><span>Reprints</span></div>`); }
     $('#sstats').insertAdjacentHTML('beforeend', extra.join(''));
     if (!withDate) { st.group='number'; [...$('#grp').children].forEach(x=>x.classList.toggle('on',x.dataset.g==='number')); }
     render();
@@ -561,6 +575,10 @@ function openCard(id){
           ${p.source?`<div>Source: ${p.source_uri?`<a href="${esc(p.source_uri)}" target="_blank" rel="noopener">${esc(p.source)} ↗</a>`:esc(p.source)}</div>`:''}`
           : `<div>No reveal record on Scryfall for this printing.</div>`}
       </div>
+      <div class="printbox" id="printbox">
+        <div class="hd">${c.reprint?'<span class="badge reprint" style="position:static">Reprint</span> Printed before':'<span class="badge newc" style="position:static">New</span> First printing of this card'}</div>
+        <div class="status" id="printhist">Loading printing history…</div>
+      </div>
       <dl class="kv">
         <dt>Set</dt><dd>${set?`<a href="#set-${esc(set.code)}">${esc(c.set_name)}</a>`:esc(c.set_name)} <span class="code">${esc(c.set)}</span></dd>
         <dt>Set release</dt><dd>${fmtDate(c.released_at)}${c.released_at>TODAY?` <span class="pill up">${relDay(c.released_at)}</span>`:''}</dd>
@@ -573,6 +591,41 @@ function openCard(id){
     </div>`;
   $('#modal').classList.add('open');
   $('#mbox .x').onclick = closeCard;
+  loadPrintHistory(c);
+}
+
+const PRINT_CACHE = new Map();
+async function loadPrintHistory(c){
+  const el = () => document.getElementById('printhist');
+  const key = c.oracle_id || c.name;
+  try{
+    let res = PRINT_CACHE.get(key);
+    if (!res){
+      const base = c.prints_search_uri || `${API}/cards/search?q=${encodeURIComponent('!"'+c.name+'"')}&unique=prints`;
+      const u = new URL(base);
+      u.searchParams.set('order','released'); u.searchParams.set('dir','asc'); u.searchParams.set('include_extras','true');
+      const j = await api(u.toString());
+      res = {total: j.total_cards || j.data.length, prints: j.data};
+      PRINT_CACHE.set(key, res);
+    }
+    const box = el(); if (!box || !$('#modal').classList.contains('open')) return;
+    // one entry per set, oldest first
+    const seen = new Set(), sets = [];
+    for (const p of res.prints){ if (!seen.has(p.set)){ seen.add(p.set); sets.push(p); } }
+    const first = sets[0];
+    const earlier = sets.filter(p=>p.set!==c.set && p.released_at<=c.released_at);
+    if (!c.reprint || !first || first.set===c.set && earlier.length===0){
+      box.innerHTML = sets.length>1
+        ? `Debuted here. Since reprinted in ${sets.length-1} other set${sets.length===2?'':'s'}.`
+        : `This is the only printing so far.`;
+    } else {
+      const shown = earlier.slice(-12).reverse();
+      box.innerHTML = `
+        <div>First printed in <a href="#set-${esc(first.set)}"><b style="color:var(--text)">${esc(first.set_name)}</b></a> (${fmtDate(first.released_at)})</div>
+        <div>${res.total} printing${res.total===1?'':'s'} across ${sets.length} set${sets.length===1?'':'s'} · in ${earlier.length} set${earlier.length===1?'':'s'} before this one</div>
+        <div class="plist">${shown.map(p=>`<a class="pill" href="#set-${esc(p.set)}" title="${esc(p.set_name)} · ${fmtDate(p.released_at)}">${esc(p.set_name)} · ${esc((p.released_at||'').slice(0,4))}</a>`).join('')}${earlier.length>12?`<span class="pill">+${earlier.length-12} more</span>`:''}</div>`;
+    }
+  }catch(e){ const box=el(); if (box) box.textContent = 'Printing history unavailable right now.'; }
 }
 function closeCard(){ $('#modal').classList.remove('open'); }
 $('#modal').addEventListener('click', e=>{ if (e.target.id==='modal') closeCard(); });
